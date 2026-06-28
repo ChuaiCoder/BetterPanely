@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Settings</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        background: #1a1a2e; color: #e0e0e0;
+        height: 100vh; overflow-y: auto;
+      }
+      .container { max-width: 400px; margin: 0 auto; padding: 24px; }
+      h1 { font-size: 20px; font-weight: 600; margin-bottom: 24px; color: #6c63ff; }
+      .section {
+        background: #1f2b47; border: 1px solid #2a3a5c;
+        border-radius: 8px; padding: 16px; margin-bottom: 12px;
+      }
+      .section h2 { font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+      .row {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 8px 0;
+      }
+      .row label { font-size: 14px; }
+      .row .hint { font-size: 11px; color: #666; margin-top: 2px; }
+      select, button {
+        padding: 6px 12px; font-size: 13px; background: #0f0f23;
+        border: 1px solid #2a3a5c; border-radius: 6px; color: #e0e0e0;
+        font-family: inherit; cursor: pointer;
+      }
+      select:focus { outline: none; border-color: #6c63ff; }
+      button { background: #6c63ff; border-color: #6c63ff; color: white; }
+      button:hover { background: #5a52d5; }
+      button.danger { background: #e74c3c; border-color: #e74c3c; }
+      .toggle {
+        position: relative; width: 44px; height: 24px; cursor: pointer;
+      }
+      .toggle input { opacity: 0; width: 0; height: 0; }
+      .toggle .slider {
+        position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+        background: #2a3a5c; border-radius: 24px; transition: 0.2s;
+      }
+      .toggle .slider:before {
+        content: ""; position: absolute; height: 18px; width: 18px;
+        left: 3px; bottom: 3px; background: white; border-radius: 50%;
+        transition: 0.2s;
+      }
+      .toggle input:checked + .slider { background: #6c63ff; }
+      .toggle input:checked + .slider:before { transform: translateX(20px); }
+      .status { font-size: 12px; color: #2ecc71; margin-top: 16px; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1 id="title">Settings</h1>
+
+      <div class="section">
+        <h2 id="lblLanguage">Language</h2>
+        <div class="row">
+          <label id="lblLangSelect">Display Language</label>
+          <select id="langSelect">
+            <option value="en">English</option>
+            <option value="zh">中文</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2 id="lblAppearance">Appearance</h2>
+        <div class="row">
+          <label id="lblTheme">Theme</label>
+          <select id="themeSelect">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="system">System</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2 id="lblBehavior">Behavior</h2>
+        <div class="row">
+          <div>
+            <label id="lblStartup">Launch on Startup</label>
+            <div class="hint" id="hintStartup">Start BetterPanely when Windows starts</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="launchStartup">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="row">
+          <div>
+            <label id="lblMinimize">Minimize to Tray</label>
+            <div class="hint" id="hintMinimize">Hide to system tray instead of closing</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="minimizeTray" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="row">
+          <div>
+            <label id="lblHotkey">Capture Hotkey</label>
+            <div class="hint" id="hintHotkey">Keyboard shortcut to capture a window</div>
+          </div>
+          <span style="font-family:monospace;font-size:13px;color:#6c63ff;" id="hotkeyDisplay">Ctrl+Shift+W</span>
+        </div>
+      </div>
+
+      <button id="saveBtn" style="width:100%;padding:12px;font-size:14px;margin-top:12px;">Save Settings</button>
+      <div class="status" id="statusBar"></div>
+    </div>
+
+    <script>
+      // ─── i18n ──────────────────────────────────────────
+      var LOCALE = {
+        en: {
+          title: "Settings", language: "Language", langSelect: "Display Language",
+          appearance: "Appearance", theme: "Theme",
+          behavior: "Behavior", launchStartup: "Launch on Startup",
+          hintStartup: "Start BetterPanely when Windows starts",
+          minimizeTray: "Minimize to Tray", hintMinimize: "Hide to system tray instead of closing",
+          captureHotkey: "Capture Hotkey", hintHotkey: "Keyboard shortcut to capture a window",
+          save: "Save Settings", saved: "Settings saved", error: "Error saving settings"
+        },
+        zh: {
+          title: "设置", language: "语言", langSelect: "显示语言",
+          appearance: "外观", theme: "主题",
+          behavior: "行为", launchStartup: "开机启动",
+          hintStartup: "Windows 启动时自动运行 BetterPanely",
+          minimizeTray: "最小化到托盘", hintMinimize: "关闭时隐藏到系统托盘而不是退出",
+          captureHotkey: "捕获热键", hintHotkey: "捕获窗口的键盘快捷键",
+          save: "保存设置", saved: "设置已保存", error: "保存设置失败"
+        }
+      };
+      function getLang() {
+        var m = location.search.match(/[?&]lang=([^&]+)/);
+        return (m && m[1] === "zh") ? "zh" : "en";
+      }
+      function t(key) { return (LOCALE[getLang()] || LOCALE.en)[key] || key; }
+      function applyLang() {
+        document.title = t("title");
+        document.getElementById("title").textContent = t("title");
+        document.getElementById("lblLanguage").textContent = t("language");
+        document.getElementById("lblLangSelect").textContent = t("langSelect");
+        document.getElementById("lblAppearance").textContent = t("appearance");
+        document.getElementById("lblTheme").textContent = t("theme");
+        document.getElementById("lblBehavior").textContent = t("behavior");
+        document.getElementById("lblStartup").textContent = t("launchStartup");
+        document.getElementById("hintStartup").textContent = t("hintStartup");
+        document.getElementById("lblMinimize").textContent = t("minimizeTray");
+        document.getElementById("hintMinimize").textContent = t("hintMinimize");
+        document.getElementById("lblHotkey").textContent = t("captureHotkey");
+        document.getElementById("hintHotkey").textContent = t("hintHotkey");
+        document.getElementById("saveBtn").textContent = t("save");
+      }
+      applyLang();
+
+      // ─── Load settings ────────────────────────────────
+      function loadSettings() {
+        if (window.__TAURI__) {
+          window.__TAURI__.invoke("get_settings").then(function(s) {
+            document.getElementById("langSelect").value = s.language;
+            document.getElementById("themeSelect").value = s.theme;
+            document.getElementById("launchStartup").checked = s.launchOnStartup;
+            document.getElementById("minimizeTray").checked = s.minimizeToTray;
+            document.getElementById("hotkeyDisplay").textContent = s.captureHotkey;
+          }).catch(function(e) {
+            console.error("Failed to load settings:", e);
+          });
+        }
+      }
+
+      // ─── Save settings ────────────────────────────────
+      document.getElementById("saveBtn").addEventListener("click", function() {
+        var lang = document.getElementById("langSelect").value;
+        if (window.__TAURI__) {
+          window.__TAURI__.invoke("set_language", { lang: lang }).then(function() {
+            var statusBar = document.getElementById("statusBar");
+            statusBar.textContent = t("saved");
+            applyLang();
+            setTimeout(function() { statusBar.textContent = ""; }, 2000);
+          }).catch(function(e) {
+            document.getElementById("statusBar").textContent = t("error") + ": " + e;
+          });
+        }
+      });
+
+      // Listen for language changes
+      if (window.__TAURI__) {
+        window.__TAURI__.event.listen("language-changed", function(evt) {
+          var url = new URL(location.href);
+          url.searchParams.set("lang", evt.payload);
+          history.replaceState(null, "", url.toString());
+          applyLang();
+        });
+      }
+
+      loadSettings();
+    </script>
+  </body>
+</html>

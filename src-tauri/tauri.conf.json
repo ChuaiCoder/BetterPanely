@@ -1,0 +1,51 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nickolay/tauri-docs/refs/heads/v2/src/content/docs/_schema/config.schema.json",
+  "productName": "BetterPanely",
+  "version": "0.1.0",
+  "identifier": "com.betterpanely.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "BetterPanely",
+        "width": 600,
+        "height": 500,
+        "resizable": true,
+        "decorations": true,
+        "center": true,
+        "label": "main"
+      }
+    ],
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true,
+      "menuOnLeftClick": false,
+      "tooltip": "BetterPanely"
+    },
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "wix": {
+        "language": "en-US"
+      }
+    }
+  }
+}

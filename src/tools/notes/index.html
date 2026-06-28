@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Notes</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        background: #1a1a2e; color: #e0e0e0;
+        height: 100vh; display: flex; flex-direction: column;
+      }
+      .toolbar {
+        display: flex; gap: 4px; padding: 8px;
+        border-bottom: 1px solid #2a3a5c; flex-shrink: 0;
+      }
+      .toolbar button {
+        padding: 6px 10px; font-size: 13px; border: 1px solid #2a3a5c;
+        border-radius: 4px; cursor: pointer; background: #1f2b47; color: #e0e0e0;
+        font-family: inherit; transition: background 0.1s;
+      }
+      .toolbar button:hover { background: #2a3a5c; }
+      .toolbar button.active { background: #6c63ff; border-color: #6c63ff; }
+      .toolbar select {
+        padding: 6px 8px; font-size: 13px; background: #1f2b47; color: #e0e0e0;
+        border: 1px solid #2a3a5c; border-radius: 4px; font-family: inherit; cursor: pointer;
+      }
+      .editor {
+        flex: 1; padding: 16px; font-size: 14px; line-height: 1.6;
+        outline: none; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;
+        background: transparent; color: #e0e0e0;
+      }
+      .editor:empty::before { content: attr(data-placeholder); color: #555; }
+      .status {
+        padding: 6px 12px; font-size: 11px; color: #666;
+        border-top: 1px solid #2a3a5c; text-align: right;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <button id="btnBold" title="Bold"><b>B</b></button>
+      <button id="btnItalic" title="Italic"><i>I</i></button>
+      <button id="btnUnderline" title="Underline"><u>U</u></button>
+      <select id="fontSize">
+        <option value="3">Normal</option>
+        <option value="1">Small</option>
+        <option value="5">Large</option>
+        <option value="7">Heading</option>
+      </select>
+      <button id="btnClear" style="margin-left:auto;">Clear</button>
+    </div>
+    <div class="editor" id="editor" contenteditable="true" data-placeholder="Start typing your note..."></div>
+    <div class="status" id="status">Saved</div>
+    <script>
+      // ─── i18n ──────────────────────────────────────────
+      var LOCALE = {
+        en: {
+          title: "Notes", bold: "Bold", italic: "Italic", underline: "Underline",
+          normal: "Normal", small: "Small", large: "Large", heading: "Heading",
+          clear: "Clear", placeholder: "Start typing your note...",
+          saved: "Saved", saving: "Saving...", cleared: "Cleared",
+          confirmClear: "Clear all content?"
+        },
+        zh: {
+          title: "便签", bold: "粗体", italic: "斜体", underline: "下划线",
+          normal: "正常", small: "小号", large: "大号", heading: "标题",
+          clear: "清空", placeholder: "开始输入便签内容...",
+          saved: "已保存", saving: "保存中...", cleared: "已清空",
+          confirmClear: "确定清空所有内容？"
+        }
+      };
+      function getLang() {
+        var m = location.search.match(/[?&]lang=([^&]+)/);
+        return (m && m[1] === "zh") ? "zh" : "en";
+      }
+      function t(key) { return (LOCALE[getLang()] || LOCALE.en)[key] || key; }
+      function applyLang() {
+        document.title = t("title");
+        document.getElementById("btnBold").title = t("bold");
+        document.getElementById("btnItalic").title = t("italic");
+        document.getElementById("btnUnderline").title = t("underline");
+        var opts = document.getElementById("fontSize").options;
+        opts[0].text = t("normal"); opts[1].text = t("small");
+        opts[2].text = t("large"); opts[3].text = t("heading");
+        document.getElementById("btnClear").textContent = t("clear");
+        document.getElementById("editor").setAttribute("data-placeholder", t("placeholder"));
+        if (document.getElementById("status").textContent.indexOf("Saved") !== -1 || document.getElementById("status").textContent.indexOf("已保存") !== -1) {
+          document.getElementById("status").textContent = t("saved");
+        }
+      }
+
+      if (window.__TAURI__) {
+        window.__TAURI__.event.listen("language-changed", function(evt) {
+          var lang = evt.payload;
+          var url = new URL(location.href);
+          url.searchParams.set("lang", lang);
+          history.replaceState(null, "", url.toString());
+          applyLang();
+        });
+      }
+      applyLang();
+
+      // ─── Notes Logic ───────────────────────────────────
+      var editor = document.getElementById("editor");
+      var statusEl = document.getElementById("status");
+      var STORAGE_KEY = "panel_notes_content";
+
+      var saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) editor.innerHTML = saved;
+
+      var saveTimeout;
+      editor.addEventListener("input", function() {
+        statusEl.textContent = t("saving");
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(function() {
+          localStorage.setItem(STORAGE_KEY, editor.innerHTML);
+          statusEl.textContent = t("saved") + " " + new Date().toLocaleTimeString();
+        }, 500);
+      });
+
+      document.getElementById("btnBold").addEventListener("click", function() { document.execCommand("bold"); });
+      document.getElementById("btnItalic").addEventListener("click", function() { document.execCommand("italic"); });
+      document.getElementById("btnUnderline").addEventListener("click", function() { document.execCommand("underline"); });
+      document.getElementById("fontSize").addEventListener("change", function(e) {
+        document.execCommand("fontSize", false, e.target.value);
+      });
+      document.getElementById("btnClear").addEventListener("click", function() {
+        if (confirm(t("confirmClear"))) {
+          editor.innerHTML = "";
+          localStorage.removeItem(STORAGE_KEY);
+          statusEl.textContent = t("cleared");
+        }
+      });
+
+      document.addEventListener("selectionchange", function() {
+        document.getElementById("btnBold").classList.toggle("active", document.queryCommandState("bold"));
+        document.getElementById("btnItalic").classList.toggle("active", document.queryCommandState("italic"));
+        document.getElementById("btnUnderline").classList.toggle("active", document.queryCommandState("underline"));
+      });
+    </script>
+  </body>
+</html>

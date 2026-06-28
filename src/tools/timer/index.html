@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Timer</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        background: #1a1a2e; color: #e0e0e0;
+        height: 100vh; display: flex; justify-content: center; align-items: center;
+        user-select: none;
+      }
+      .timer-container { text-align: center; padding: 24px; }
+      .tabs { display: flex; gap: 4px; margin-bottom: 20px; justify-content: center; }
+      .tab {
+        padding: 8px 20px; border: 1px solid #2a3a5c; border-radius: 6px;
+        cursor: pointer; background: #1f2b47; color: #a0a0b0;
+        font-size: 13px; font-family: inherit; transition: all 0.15s;
+      }
+      .tab.active { background: #6c63ff; border-color: #6c63ff; color: white; }
+      .time-display {
+        font-size: 64px; font-weight: 200; font-family: "Consolas", "Cascadia Code", monospace;
+        color: #6c63ff; margin-bottom: 20px; letter-spacing: 2px;
+      }
+      .time-input { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; }
+      .time-input input {
+        width: 60px; padding: 10px; text-align: center; font-size: 20px;
+        background: #0f0f23; border: 1px solid #2a3a5c; border-radius: 6px;
+        color: #e0e0e0; font-family: "Consolas", monospace;
+      }
+      .time-input span { font-size: 24px; color: #666; align-self: center; }
+      .controls { display: flex; gap: 10px; justify-content: center; }
+      button {
+        padding: 10px 24px; font-size: 14px; border: 1px solid #2a3a5c;
+        border-radius: 6px; cursor: pointer; font-family: inherit; transition: all 0.1s;
+      }
+      button:active { transform: scale(0.95); }
+      .btn-start { background: #2ecc71; color: white; border-color: #2ecc71; }
+      .btn-start:hover { background: #27ae60; }
+      .btn-pause { background: #f39c12; color: white; border-color: #f39c12; }
+      .btn-pause:hover { background: #d68910; }
+      .btn-reset { background: #e74c3c; color: white; border-color: #e74c3c; }
+      .btn-reset:hover { background: #c0392b; }
+    </style>
+  </head>
+  <body>
+    <div class="timer-container">
+      <div class="tabs">
+        <button class="tab active" data-mode="countdown">Countdown</button>
+        <button class="tab" data-mode="stopwatch">Stopwatch</button>
+      </div>
+
+      <div class="time-input" id="timeInput">
+        <input type="number" id="hours" value="0" min="0" max="99" placeholder="HH">
+        <span>:</span>
+        <input type="number" id="minutes" value="5" min="0" max="59" placeholder="MM">
+        <span>:</span>
+        <input type="number" id="seconds" value="0" min="0" max="59" placeholder="SS">
+      </div>
+
+      <div class="time-display" id="timeDisplay">05:00</div>
+
+      <div class="controls">
+        <button class="btn-start" id="btnStart">Start</button>
+        <button class="btn-pause" id="btnPause" disabled>Pause</button>
+        <button class="btn-reset" id="btnReset">Reset</button>
+      </div>
+    </div>
+
+    <script>
+      // ─── i18n ──────────────────────────────────────────
+      var LOCALE = {
+        en: {
+          title: "Timer", countdown: "Countdown", stopwatch: "Stopwatch",
+          start: "Start", pause: "Pause", reset: "Reset",
+          hh: "HH", mm: "MM", ss: "SS", timesUp: "Time's up!"
+        },
+        zh: {
+          title: "计时器", countdown: "倒计时", stopwatch: "秒表",
+          start: "开始", pause: "暂停", reset: "重置",
+          hh: "时", mm: "分", ss: "秒", timesUp: "时间到！"
+        }
+      };
+      function getLang() {
+        var m = location.search.match(/[?&]lang=([^&]+)/);
+        return (m && m[1] === "zh") ? "zh" : "en";
+      }
+      function t(key) { return (LOCALE[getLang()] || LOCALE.en)[key] || key; }
+      function applyLang() {
+        document.title = t("title");
+        document.querySelectorAll(".tab")[0].textContent = t("countdown");
+        document.querySelectorAll(".tab")[1].textContent = t("stopwatch");
+        document.getElementById("btnStart").textContent = t("start");
+        document.getElementById("btnPause").textContent = t("pause");
+        document.getElementById("btnReset").textContent = t("reset");
+        document.getElementById("hours").placeholder = t("hh");
+        document.getElementById("minutes").placeholder = t("mm");
+        document.getElementById("seconds").placeholder = t("ss");
+      }
+
+      if (window.__TAURI__) {
+        window.__TAURI__.event.listen("language-changed", function(evt) {
+          var lang = evt.payload;
+          var url = new URL(location.href);
+          url.searchParams.set("lang", lang);
+          history.replaceState(null, "", url.toString());
+          applyLang();
+        });
+      }
+      applyLang();
+
+      // ─── Timer Logic ───────────────────────────────────
+      var mode = "countdown", totalSeconds = 300, remaining = totalSeconds;
+      var stopwatchTime = 0, interval = null, running = false;
+
+      var display = document.getElementById("timeDisplay");
+      var btnStart = document.getElementById("btnStart");
+      var btnPause = document.getElementById("btnPause");
+      var btnReset = document.getElementById("btnReset");
+      var timeInput = document.getElementById("timeInput");
+
+      function fmt(t) {
+        var h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+        if (h > 0) return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0");
+        return String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0");
+      }
+
+      function updateDisplay() {
+        display.textContent = mode === "countdown" ? fmt(remaining) : fmt(stopwatchTime);
+      }
+
+      function readInput() {
+        var h = parseInt(document.getElementById("hours").value) || 0;
+        var m = parseInt(document.getElementById("minutes").value) || 0;
+        var s = parseInt(document.getElementById("seconds").value) || 0;
+        return h * 3600 + m * 60 + s;
+      }
+
+      function start() {
+        if (running) return;
+        if (mode === "countdown" && remaining <= 0) remaining = readInput();
+        running = true; btnStart.disabled = true; btnPause.disabled = false;
+        interval = setInterval(function() {
+          if (mode === "countdown") {
+            remaining--;
+            if (remaining <= 0) { remaining = 0; pause(); alert(t("timesUp")); }
+          } else { stopwatchTime++; }
+          updateDisplay();
+        }, 1000);
+      }
+
+      function pause() {
+        running = false; clearInterval(interval); interval = null;
+        btnStart.disabled = false; btnPause.disabled = true;
+      }
+
+      function reset() {
+        pause();
+        if (mode === "countdown") { remaining = readInput(); } else { stopwatchTime = 0; }
+        updateDisplay();
+      }
+
+      btnStart.addEventListener("click", start);
+      btnPause.addEventListener("click", pause);
+      btnReset.addEventListener("click", reset);
+
+      document.querySelectorAll(".tab").forEach(function(tab) {
+        tab.addEventListener("click", function() {
+          document.querySelectorAll(".tab").forEach(function(t) { t.classList.remove("active"); });
+          tab.classList.add("active");
+          mode = tab.dataset.mode; pause(); reset();
+          timeInput.style.display = mode === "countdown" ? "flex" : "none";
+          if (mode === "countdown") remaining = readInput();
+          else stopwatchTime = 0;
+          updateDisplay();
+        });
+      });
+
+      ["hours","minutes","seconds"].forEach(function(id) {
+        document.getElementById(id).addEventListener("change", function() {
+          if (mode === "countdown" && !running) { remaining = readInput(); updateDisplay(); }
+        });
+      });
+    </script>
+  </body>
+</html>

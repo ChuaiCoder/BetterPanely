@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Calculator</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        background: #1a1a2e;
+        color: #e0e0e0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        user-select: none;
+      }
+      .calculator { width: 100%; max-width: 280px; padding: 12px; }
+      .display {
+        background: #0f0f23; border: 1px solid #2a3a5c; border-radius: 8px;
+        padding: 16px; text-align: right; font-size: 28px; font-weight: 300;
+        font-family: "Consolas", "Cascadia Code", monospace; margin-bottom: 12px;
+        min-height: 64px; word-break: break-all; color: #6c63ff;
+      }
+      .buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+      button {
+        padding: 14px 8px; font-size: 16px; border: 1px solid #2a3a5c;
+        border-radius: 6px; cursor: pointer; background: #1f2b47; color: #e0e0e0;
+        transition: background 0.1s, transform 0.05s; font-family: inherit;
+      }
+      button:active { transform: scale(0.95); }
+      button:hover { background: #2a3a5c; }
+      button.operator { background: #6c63ff; color: white; border-color: #6c63ff; }
+      button.operator:hover { background: #5a52d5; }
+      button.equals { background: #2ecc71; color: white; border-color: #2ecc71; }
+      button.equals:hover { background: #27ae60; }
+      button.clear { background: #e74c3c; color: white; border-color: #e74c3c; }
+      button.clear:hover { background: #c0392b; }
+      button.span2 { grid-column: span 2; }
+    </style>
+  </head>
+  <body>
+    <div class="calculator">
+      <div class="display" id="display">0</div>
+      <div class="buttons">
+        <button class="clear span2" id="clear">AC</button>
+        <button class="operator" id="backspace">⌫</button>
+        <button class="operator" id="divide">÷</button>
+        <button id="seven">7</button>
+        <button id="eight">8</button>
+        <button id="nine">9</button>
+        <button class="operator" id="multiply">×</button>
+        <button id="four">4</button>
+        <button id="five">5</button>
+        <button id="six">6</button>
+        <button class="operator" id="subtract">−</button>
+        <button id="one">1</button>
+        <button id="two">2</button>
+        <button id="three">3</button>
+        <button class="operator" id="add">+</button>
+        <button id="zero">0</button>
+        <button id="decimal">.</button>
+        <button class="equals span2" id="equals">=</button>
+      </div>
+    </div>
+    <script>
+      // ─── i18n ──────────────────────────────────────────
+      var LOCALE = {
+        en: { title: "Calculator", clear: "AC", error: "Error" },
+        zh: { title: "计算器", clear: "清空", error: "错误" }
+      };
+      function getLang() {
+        var m = location.search.match(/[?&]lang=([^&]+)/);
+        return (m && m[1] === "zh") ? "zh" : "en";
+      }
+      function t(key) { return (LOCALE[getLang()] || LOCALE.en)[key] || key; }
+      function applyLang() {
+        document.title = t("title");
+        document.getElementById("clear").textContent = t("clear");
+      }
+
+      // Listen for language changes from Tauri
+      if (window.__TAURI__) {
+        window.__TAURI__.event.listen("language-changed", function(evt) {
+          var lang = evt.payload;
+          var url = new URL(location.href);
+          url.searchParams.set("lang", lang);
+          history.replaceState(null, "", url.toString());
+          applyLang();
+        });
+      }
+      applyLang();
+
+      // ─── Calculator Logic ─────────────────────────────
+      var display = document.getElementById("display");
+      var current = "0", previous = "", operation = null, shouldReset = false;
+
+      function updateDisplay() { display.textContent = current; }
+
+      function appendNumber(num) {
+        if (shouldReset) { current = ""; shouldReset = false; }
+        if (current === "0" && num !== ".") current = num;
+        else if (num === "." && current.includes(".")) return;
+        else current += num;
+        updateDisplay();
+      }
+
+      function chooseOp(op) {
+        if (operation && !shouldReset) compute();
+        previous = current; operation = op; shouldReset = true;
+      }
+
+      function compute() {
+        if (!operation || shouldReset) return;
+        var prev = parseFloat(previous), curr = parseFloat(current), result;
+        switch (operation) {
+          case "+": result = prev + curr; break;
+          case "−": result = prev - curr; break;
+          case "×": result = prev * curr; break;
+          case "÷": result = curr !== 0 ? prev / curr : t("error"); break;
+          default: return;
+        }
+        current = typeof result === "number" ? String(Math.round(result * 1e10) / 1e10) : result;
+        operation = null; previous = ""; updateDisplay();
+      }
+
+      function clearAll() {
+        current = "0"; previous = ""; operation = null; shouldReset = false; updateDisplay();
+      }
+
+      function backspace() {
+        if (shouldReset) return;
+        current = current.length > 1 ? current.slice(0, -1) : "0"; updateDisplay();
+      }
+
+      document.getElementById("clear").addEventListener("click", clearAll);
+      document.getElementById("backspace").addEventListener("click", backspace);
+      document.getElementById("divide").addEventListener("click", function() { chooseOp("÷"); });
+      document.getElementById("multiply").addEventListener("click", function() { chooseOp("×"); });
+      document.getElementById("subtract").addEventListener("click", function() { chooseOp("−"); });
+      document.getElementById("add").addEventListener("click", function() { chooseOp("+"); });
+      document.getElementById("equals").addEventListener("click", compute);
+      document.getElementById("decimal").addEventListener("click", function() { appendNumber("."); });
+      ["zero","one","two","three","four","five","six","seven","eight","nine"].forEach(function(id, i) {
+        document.getElementById(id).addEventListener("click", function() { appendNumber(String(i)); });
+      });
+    </script>
+  </body>
+</html>

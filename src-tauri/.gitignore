@@ -1,0 +1,7 @@
+# Rust / Cargo
+target/
+gen/
+
+# Tauri bundle
+target/release/bundle/
+*.msi
