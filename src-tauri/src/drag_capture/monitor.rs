@@ -181,7 +181,7 @@ fn cursor_position_in_workbench(app: &AppHandle) -> Option<(i32, i32)> {
 }
 
 fn workbench_client_rect(app: &AppHandle) -> Option<WorkbenchClientRect> {
-    let window = app.get_webview_window("main")?;
+    let window = app.get_webview_window(crate::WORKBENCH_WINDOW_LABEL)?;
     let hwnd = window.hwnd().ok()?;
     let hwnd = HWND(hwnd.0);
     let mut client = RECT::default();
@@ -230,7 +230,7 @@ fn payload_for_source(source_hwnd: isize, x: i32, y: i32) -> Option<DragEnteredW
 }
 
 fn emit_drag_entered(app: &AppHandle, payload: DragEnteredWorkbenchPayload) -> bool {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_webview_window(crate::WORKBENCH_WINDOW_LABEL) {
         let _ = window.emit("drag:entered-workbench", payload);
         true
     } else {
@@ -245,7 +245,7 @@ fn emit_drag_position(
     x: i32,
     y: i32,
 ) -> bool {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_webview_window(crate::WORKBENCH_WINDOW_LABEL) {
         let payload = DragPositionPayload { source_hwnd, x, y };
         let _ = window.emit(event_name, payload);
         true

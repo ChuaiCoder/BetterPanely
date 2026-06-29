@@ -330,7 +330,7 @@ unsafe extern "system" fn source_destroyed_callback(
     };
 
     for payload in payloads {
-        if let Some(window) = app.get_webview_window("main") {
+        if let Some(window) = app.get_webview_window(crate::WORKBENCH_WINDOW_LABEL) {
             let _ = window.emit("thumb:source-closed", payload);
         }
     }

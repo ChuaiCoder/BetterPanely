@@ -19,7 +19,7 @@
         "resizable": true,
         "decorations": true,
         "center": true,
-        "label": "main"
+        "label": "workbench"
       }
     ],
     "trayIcon": {

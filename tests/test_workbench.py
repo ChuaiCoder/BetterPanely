@@ -70,7 +70,7 @@ class TestWorkbenchRuntimeShape:
         assert "DwmUpdateThumbnailProperties" in dwm_rs
         assert "DwmUnregisterThumbnail" in dwm_rs
         assert "DWM_TNP_RECTDESTINATION" in manager_rs
-        assert "get_webview_window(\"main\")" in workbench_cmds
+        assert "get_webview_window(crate::WORKBENCH_WINDOW_LABEL)" in workbench_cmds
         assert ".register(dest_hwnd,source_hwnd,&panel_id)" in compact_workbench_cmds
 
     def test_thumbnail_source_lifetime_is_checked(self, repo_root):
@@ -381,6 +381,19 @@ class TestWorkbenchPersistenceShape:
         hotkeys_rs = (repo_root / "src-tauri/src/hotkeys.rs").read_text(
             encoding="utf-8"
         )
+        tauri_conf = (repo_root / "src-tauri/tauri.conf.json").read_text(
+            encoding="utf-8"
+        )
+        workbench_cmds = (
+            repo_root / "src-tauri/src/commands/workbench_cmds.rs"
+        ).read_text(encoding="utf-8")
+        drag_monitor = (
+            repo_root / "src-tauri/src/drag_capture/monitor.rs"
+        ).read_text(encoding="utf-8")
+        thumbnail_manager = (
+            repo_root / "src-tauri/src/thumbnail/manager.rs"
+        ).read_text(encoding="utf-8")
+        tray_rs = (repo_root / "src-tauri/src/tray.rs").read_text(encoding="utf-8")
         main_tsx = (repo_root / "src/main.tsx").read_text(encoding="utf-8")
         settings_api = (repo_root / "src/lib/settings-api.ts").read_text(
             encoding="utf-8"
@@ -391,9 +404,19 @@ class TestWorkbenchPersistenceShape:
             encoding="utf-8"
         )
 
+        assert '"label": "workbench"' in tauri_conf
+        assert '"workbench"' in capabilities
+        assert '"main"' not in capabilities
         assert '"settings_window"' in capabilities
         assert '"tool_*_window"' in capabilities
         assert '"panel_*"' not in capabilities
+        assert 'WORKBENCH_WINDOW_LABEL: &str = "workbench"' in lib_rs
+        assert "window.label() != WORKBENCH_WINDOW_LABEL" in lib_rs
+        assert "get_webview_window(crate::WORKBENCH_WINDOW_LABEL)" in workbench_cmds
+        assert "get_webview_window(crate::WORKBENCH_WINDOW_LABEL)" in drag_monitor
+        assert "get_webview_window(crate::WORKBENCH_WINDOW_LABEL)" in thumbnail_manager
+        assert "get_webview_window(crate::WORKBENCH_WINDOW_LABEL)" in tray_rs
+        assert "get_webview_window(crate::WORKBENCH_WINDOW_LABEL)" in hotkeys_rs
         assert 'rename_all = "camelCase"' in state_rs
         assert 'alias = "launch_on_startup"' in state_rs
         assert 'alias = "minimize_to_tray"' in state_rs

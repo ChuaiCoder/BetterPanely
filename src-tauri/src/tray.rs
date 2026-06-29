@@ -53,7 +53,10 @@ pub fn create_tray(app: &tauri::AppHandle, lang: &str) -> Result<(), Box<dyn std
                 ..
             } = event
             {
-                if let Some(window) = tray.app_handle().get_webview_window("main") {
+                if let Some(window) = tray
+                    .app_handle()
+                    .get_webview_window(crate::WORKBENCH_WINDOW_LABEL)
+                {
                     let _ = window.show();
                     let _ = window.set_focus();
                 }
@@ -68,38 +71,38 @@ pub fn create_tray(app: &tauri::AppHandle, lang: &str) -> Result<(), Box<dyn std
 fn handle_tray_menu(app_handle: &AppHandle, menu_id: &str) {
     match menu_id {
         "new_panel" => {
-            if let Some(window) = app_handle.get_webview_window("main") {
+            if let Some(window) = app_handle.get_webview_window(crate::WORKBENCH_WINDOW_LABEL) {
                 let _ = window.show();
                 let _ = window.set_focus();
                 let _ = window.emit("tray:new-panel", ());
             }
         }
         "calculator" => {
-            if let Some(window) = app_handle.get_webview_window("main") {
+            if let Some(window) = app_handle.get_webview_window(crate::WORKBENCH_WINDOW_LABEL) {
                 let _ = window.show();
                 let _ = window.emit("tray:launch-tool", "calculator");
             }
         }
         "notes" => {
-            if let Some(window) = app_handle.get_webview_window("main") {
+            if let Some(window) = app_handle.get_webview_window(crate::WORKBENCH_WINDOW_LABEL) {
                 let _ = window.show();
                 let _ = window.emit("tray:launch-tool", "notes");
             }
         }
         "timer" => {
-            if let Some(window) = app_handle.get_webview_window("main") {
+            if let Some(window) = app_handle.get_webview_window(crate::WORKBENCH_WINDOW_LABEL) {
                 let _ = window.show();
                 let _ = window.emit("tray:launch-tool", "timer");
             }
         }
         "weather" => {
-            if let Some(window) = app_handle.get_webview_window("main") {
+            if let Some(window) = app_handle.get_webview_window(crate::WORKBENCH_WINDOW_LABEL) {
                 let _ = window.show();
                 let _ = window.emit("tray:launch-tool", "weather");
             }
         }
         "show_main" => {
-            if let Some(window) = app_handle.get_webview_window("main") {
+            if let Some(window) = app_handle.get_webview_window(crate::WORKBENCH_WINDOW_LABEL) {
                 let _ = window.show();
                 let _ = window.set_focus();
             }
@@ -133,13 +136,13 @@ fn handle_tray_menu(app_handle: &AppHandle, menu_id: &str) {
             }
         }
         "lang_en" => {
-            if let Some(window) = app_handle.get_webview_window("main") {
+            if let Some(window) = app_handle.get_webview_window(crate::WORKBENCH_WINDOW_LABEL) {
                 let _ = window.show();
                 let _ = window.emit("tray:set-language", "en");
             }
         }
         "lang_zh" => {
-            if let Some(window) = app_handle.get_webview_window("main") {
+            if let Some(window) = app_handle.get_webview_window(crate::WORKBENCH_WINDOW_LABEL) {
                 let _ = window.show();
                 let _ = window.emit("tray:set-language", "zh");
             }

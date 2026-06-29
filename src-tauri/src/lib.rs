@@ -17,6 +17,8 @@ pub struct AppState {
     pub state_manager: Mutex<AppStateManager>,
 }
 
+pub const WORKBENCH_WINDOW_LABEL: &str = "workbench";
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::init();
@@ -76,7 +78,7 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if window.label() != "main" {
+            if window.label() != WORKBENCH_WINDOW_LABEL {
                 return;
             }
 

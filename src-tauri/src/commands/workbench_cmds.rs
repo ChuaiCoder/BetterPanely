@@ -46,7 +46,7 @@ fn to_window_info(w: enumerator::WindowInfo) -> WindowInfo {
 #[cfg(target_os = "windows")]
 fn get_workbench_hwnd(app: &AppHandle) -> Result<isize, String> {
     let window = app
-        .get_webview_window("main")
+        .get_webview_window(crate::WORKBENCH_WINDOW_LABEL)
         .ok_or_else(|| "Workbench window not found".to_string())?;
     let hwnd = window.hwnd().map_err(|e| e.to_string())?;
     Ok(hwnd.0 as isize)

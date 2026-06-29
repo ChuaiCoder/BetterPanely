@@ -12,7 +12,7 @@ pub fn register_capture_hotkey(app_handle: &AppHandle, hotkey: &str) -> Result<(
                 return;
             }
 
-            if let Some(window) = app_for_event.get_webview_window("main") {
+            if let Some(window) = app_for_event.get_webview_window(crate::WORKBENCH_WINDOW_LABEL) {
                 let _ = window.emit(CAPTURE_HOTKEY_EVENT, ());
             }
         })
