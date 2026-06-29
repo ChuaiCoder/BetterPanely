@@ -1,16 +1,70 @@
 use tauri::{
-    AppHandle, Manager, WebviewUrl, WebviewWindowBuilder,
     menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter,
+    AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder,
 };
 
+const TRAY_ID: &str = "betterpanely-tray";
+
 /// Create the system tray icon and menu with localized labels
-pub fn create_tray(app: &tauri::AppHandle, lang: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn create_tray<R: Runtime>(
+    app: &AppHandle<R>,
+    lang: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let menu = build_tray_menu(app, lang)?;
+
+    let _tray = TrayIconBuilder::with_id(TRAY_ID)
+        .menu(&menu)
+        .tooltip(crate::locales::t("tray.tooltip", lang))
+        .on_menu_event(move |app_handle, event| {
+            handle_tray_menu(app_handle, event.id().as_ref());
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                if let Some(window) = tray
+                    .app_handle()
+                    .get_webview_window(crate::WORKBENCH_WINDOW_LABEL)
+                {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        })
+        .build(app)?;
+
+    Ok(())
+}
+
+/// Refresh tray labels after the persisted language changes.
+pub fn refresh_tray_language<R: Runtime>(
+    app: &AppHandle<R>,
+    lang: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let menu = build_tray_menu(app, lang)?;
+
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        tray.set_menu(Some(menu))?;
+        tray.set_tooltip(Some(crate::locales::t("tray.tooltip", lang)))?;
+        Ok(())
+    } else {
+        create_tray(app, lang)
+    }
+}
+
+fn build_tray_menu<R: Runtime>(
+    app: &AppHandle<R>,
+    lang: &str,
+) -> Result<tauri::menu::Menu<R>, Box<dyn std::error::Error>> {
     use crate::locales::t;
 
     let new_panel = MenuItemBuilder::with_id("new_panel", t("menu.new_panel", lang)).build(app)?;
-    let calculator = MenuItemBuilder::with_id("calculator", t("menu.calculator", lang)).build(app)?;
+    let calculator =
+        MenuItemBuilder::with_id("calculator", t("menu.calculator", lang)).build(app)?;
     let notes = MenuItemBuilder::with_id("notes", t("menu.notes", lang)).build(app)?;
     let timer = MenuItemBuilder::with_id("timer", t("menu.timer", lang)).build(app)?;
     let weather = MenuItemBuilder::with_id("weather", t("menu.weather", lang)).build(app)?;
@@ -40,35 +94,11 @@ pub fn create_tray(app: &tauri::AppHandle, lang: &str) -> Result<(), Box<dyn std
         .item(&quit)
         .build()?;
 
-    let _tray = TrayIconBuilder::new()
-        .menu(&menu)
-        .tooltip(t("tray.tooltip", lang))
-        .on_menu_event(move |app_handle, event| {
-            handle_tray_menu(app_handle, event.id().as_ref());
-        })
-        .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                ..
-            } = event
-            {
-                if let Some(window) = tray
-                    .app_handle()
-                    .get_webview_window(crate::WORKBENCH_WINDOW_LABEL)
-                {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
-            }
-        })
-        .build(app)?;
-
-    Ok(())
+    Ok(menu)
 }
 
 /// Handle tray menu item clicks
-fn handle_tray_menu(app_handle: &AppHandle, menu_id: &str) {
+fn handle_tray_menu<R: Runtime>(app_handle: &AppHandle<R>, menu_id: &str) {
     match menu_id {
         "new_panel" => {
             if let Some(window) = app_handle.get_webview_window(crate::WORKBENCH_WINDOW_LABEL) {
@@ -122,17 +152,14 @@ fn handle_tray_menu(app_handle: &AppHandle, menu_id: &str) {
                 }
             } else {
                 let url = format!("src/tools/settings/index.html#lang={}", lang);
-                let _webview = WebviewWindowBuilder::new(
-                    app_handle,
-                    label,
-                    WebviewUrl::App(url.into()),
-                )
-                .title("Settings")
-                .inner_size(420.0, 520.0)
-                .center()
-                .decorations(true)
-                .resizable(false)
-                .build();
+                let _webview =
+                    WebviewWindowBuilder::new(app_handle, label, WebviewUrl::App(url.into()))
+                        .title("Settings")
+                        .inner_size(420.0, 520.0)
+                        .center()
+                        .decorations(true)
+                        .resizable(false)
+                        .build();
             }
         }
         "lang_en" => {

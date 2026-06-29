@@ -70,6 +70,11 @@ pub async fn set_settings(
     };
 
     if language_changed {
+        if let Err(error) =
+            crate::tray::refresh_tray_language(&app_handle, &saved_settings.language)
+        {
+            log::warn!("Failed to refresh tray language: {}", error);
+        }
         let _ = app_handle.emit("language-changed", &saved_settings.language);
         log::info!("Language changed to: {}", saved_settings.language);
     }
@@ -101,6 +106,10 @@ pub async fn set_language(
         let saved_settings = state_mgr.get_settings().clone();
         (lang, saved_settings)
     };
+
+    if let Err(error) = crate::tray::refresh_tray_language(&app_handle, &new_lang) {
+        log::warn!("Failed to refresh tray language: {}", error);
+    }
 
     let _ = app_handle.emit("language-changed", &new_lang);
     let _ = app_handle.emit("settings-changed", &saved_settings);

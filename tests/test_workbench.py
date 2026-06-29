@@ -435,6 +435,13 @@ class TestWorkbenchPersistenceShape:
         assert "get_webview_window(crate::WORKBENCH_WINDOW_LABEL)" in thumbnail_manager
         assert "get_webview_window(crate::WORKBENCH_WINDOW_LABEL)" in tray_rs
         assert "get_webview_window(crate::WORKBENCH_WINDOW_LABEL)" in hotkeys_rs
+        assert 'TRAY_ID: &str = "betterpanely-tray"' in tray_rs
+        assert "TrayIconBuilder::with_id(TRAY_ID)" in tray_rs
+        assert "build_tray_menu" in tray_rs
+        assert "refresh_tray_language" in tray_rs
+        assert "app.tray_by_id(TRAY_ID)" in tray_rs
+        assert "tray.set_menu(Some(menu))" in tray_rs
+        assert "tray.set_tooltip" in tray_rs
         assert 'rename_all = "camelCase"' in state_rs
         assert 'alias = "launch_on_startup"' in state_rs
         assert 'alias = "minimize_to_tray"' in state_rs
@@ -455,6 +462,11 @@ class TestWorkbenchPersistenceShape:
         assert "RegSetValueExW" in settings_cmds
         assert "RegDeleteValueW" in settings_cmds
         assert "replace_capture_hotkey" in settings_cmds
+        assert (
+            "crate::tray::refresh_tray_language(&app_handle, &saved_settings.language)"
+            in settings_cmds
+        )
+        assert "crate::tray::refresh_tray_language(&app_handle, &new_lang)" in settings_cmds
         assert "register_capture_hotkey(app.handle(), &capture_hotkey)" in lib_rs
         assert "ShortcutState::Pressed" in hotkeys_rs
         assert ".unregister(old_hotkey)" in hotkeys_rs
