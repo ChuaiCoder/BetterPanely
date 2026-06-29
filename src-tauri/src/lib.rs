@@ -9,7 +9,7 @@ mod thumbnail;
 use state::AppStateManager;
 use thumbnail::SharedThumbnailManager;
 use std::sync::Mutex;
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Manager, WindowEvent};
 
 /// Application state shared across all handlers
 pub struct AppState {
@@ -41,7 +41,9 @@ pub fn run() {
             if let Err(e) = state_mgr.load(app.handle()) {
                 log::warn!("Failed to load saved state: {}", e);
             }
-            let current_lang = state_mgr.get_language();
+            let current_settings = state_mgr.get_settings().clone();
+            let current_lang = current_settings.language.clone();
+            let capture_hotkey = current_settings.capture_hotkey.clone();
             drop(state_mgr);
 
             // Initialize system tray with loaded language
@@ -53,20 +55,49 @@ pub fn run() {
             {
                 use tauri_plugin_global_shortcut::GlobalShortcutExt;
                 let app_handle = app.handle().clone();
-                match app.global_shortcut().on_shortcut("Ctrl+Shift+W", move |_app, _shortcut, _event| {
-                    if let Some(window) = app_handle.get_webview_window("main") {
-                        let _ = window.emit("tray:capture-hotkey", ());
-                    }
-                }) {
-                    Ok(_) => log::info!("Global shortcut Ctrl+Shift+W registered"),
-                    Err(e) => log::error!("Failed to register Ctrl+Shift+W: {}", e),
+                let registered_hotkey = capture_hotkey.clone();
+                match app.global_shortcut().on_shortcut(
+                    capture_hotkey.as_str(),
+                    move |_app, _shortcut, _event| {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.emit("tray:capture-hotkey", ());
+                        }
+                    },
+                ) {
+                    Ok(_) => log::info!("Global shortcut {} registered", registered_hotkey),
+                    Err(e) => log::error!("Failed to register {}: {}", registered_hotkey, e),
                 }
             }
 
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if window.label() != "main" {
+                return;
+            }
+
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let app_handle = window.app_handle();
+                let minimize_to_tray = app_handle
+                    .state::<AppState>()
+                    .state_manager
+                    .lock()
+                    .map(|state_mgr| state_mgr.get_settings().minimize_to_tray)
+                    .unwrap_or(false);
+
+                if minimize_to_tray {
+                    api.prevent_close();
+                    let _ = window.hide();
+                } else {
+                    let thumbnails = app_handle.state::<SharedThumbnailManager>();
+                    thumbnails.unregister_all();
+                    app_handle.exit(0);
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::settings_cmds::get_settings,
+            commands::settings_cmds::set_settings,
             commands::settings_cmds::get_language,
             commands::settings_cmds::set_language,
             commands::settings_cmds::open_settings,

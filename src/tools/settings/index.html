@@ -5,59 +5,90 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Settings</title>
     <style>
+      :root {
+        color-scheme: dark;
+        --page-bg: #1a1a2e;
+        --titlebar-bg: #0f0f23;
+        --section-bg: #1f2b47;
+        --field-bg: #0f0f23;
+        --border: #2a3a5c;
+        --text: #e0e0e0;
+        --text-muted: #888;
+        --text-subtle: #666;
+        --accent: #6c63ff;
+        --accent-hover: #5a52d5;
+        --success: #2ecc71;
+        --danger: #e74c3c;
+      }
+      :root[data-theme="light"] {
+        color-scheme: light;
+        --page-bg: #f7f9fc;
+        --titlebar-bg: #e8edf7;
+        --section-bg: #ffffff;
+        --field-bg: #f1f5fb;
+        --border: #cad4e5;
+        --text: #172033;
+        --text-muted: #546179;
+        --text-subtle: #748197;
+        --accent: #2563eb;
+        --accent-hover: #1d4ed8;
+        --success: #15803d;
+        --danger: #dc2626;
+      }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body {
         font-family: "Segoe UI", system-ui, sans-serif;
-        background: #1a1a2e; color: #e0e0e0;
+        background: var(--page-bg); color: var(--text);
         height: 100vh; display: flex; flex-direction: column;
         overflow: hidden;
       }
       .titlebar {
         height: 32px; flex-shrink: 0;
         display: flex; align-items: center; justify-content: center;
-        background: #0f0f23; cursor: grab;
-        font-size: 12px; color: #888; letter-spacing: 1px;
-        border-bottom: 1px solid #2a3a5c;
+        background: var(--titlebar-bg); cursor: grab;
+        font-size: 12px; color: var(--text-muted); letter-spacing: 1px;
+        border-bottom: 1px solid var(--border);
       }
       .titlebar:active { cursor: grabbing; }
       .container { flex: 1; overflow-y: auto; max-width: 400px; margin: 0 auto; padding: 16px 24px; }
-      h1 { font-size: 20px; font-weight: 600; margin-bottom: 24px; color: #6c63ff; }
+      h1 { font-size: 20px; font-weight: 600; margin-bottom: 24px; color: var(--accent); }
       .section {
-        background: #1f2b47; border: 1px solid #2a3a5c;
+        background: var(--section-bg); border: 1px solid var(--border);
         border-radius: 8px; padding: 16px; margin-bottom: 12px;
       }
-      .section h2 { font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+      .section h2 { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
       .row {
         display: flex; justify-content: space-between; align-items: center;
         padding: 8px 0;
       }
       .row label { font-size: 14px; }
-      .row .hint { font-size: 11px; color: #666; margin-top: 2px; }
+      .row .hint { font-size: 11px; color: var(--text-subtle); margin-top: 2px; }
       select, button {
-        padding: 6px 12px; font-size: 13px; background: #0f0f23;
-        border: 1px solid #2a3a5c; border-radius: 6px; color: #e0e0e0;
+        padding: 6px 12px; font-size: 13px; background: var(--field-bg);
+        border: 1px solid var(--border); border-radius: 6px; color: var(--text);
         font-family: inherit; cursor: pointer;
       }
-      select:focus { outline: none; border-color: #6c63ff; }
-      button { background: #6c63ff; border-color: #6c63ff; color: white; }
-      button:hover { background: #5a52d5; }
-      button.danger { background: #e74c3c; border-color: #e74c3c; }
+      select:focus { outline: none; border-color: var(--accent); }
+      button { background: var(--accent); border-color: var(--accent); color: white; }
+      button:hover { background: var(--accent-hover); }
+      button.danger { background: var(--danger); border-color: var(--danger); }
       .toggle {
         position: relative; width: 44px; height: 24px; cursor: pointer;
       }
       .toggle input { opacity: 0; width: 0; height: 0; }
       .toggle .slider {
         position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-        background: #2a3a5c; border-radius: 24px; transition: 0.2s;
+        background: var(--border); border-radius: 24px; transition: 0.2s;
       }
       .toggle .slider:before {
         content: ""; position: absolute; height: 18px; width: 18px;
         left: 3px; bottom: 3px; background: white; border-radius: 50%;
         transition: 0.2s;
       }
-      .toggle input:checked + .slider { background: #6c63ff; }
+      .toggle input:checked + .slider { background: var(--accent); }
       .toggle input:checked + .slider:before { transform: translateX(20px); }
-      .status { font-size: 12px; color: #2ecc71; margin-top: 16px; text-align: center; }
+      .status { font-size: 12px; color: var(--success); margin-top: 16px; text-align: center; }
+      .status.error { color: var(--danger); }
     </style>
   </head>
   <body>
@@ -117,7 +148,7 @@
             <label id="lblHotkey">Capture Hotkey</label>
             <div class="hint" id="hintHotkey">Keyboard shortcut to capture a window</div>
           </div>
-          <span style="font-family:monospace;font-size:13px;color:#6c63ff;" id="hotkeyDisplay">Ctrl+Shift+W</span>
+          <span style="font-family:monospace;font-size:13px;color:var(--accent);" id="hotkeyDisplay">Ctrl+Shift+W</span>
         </div>
       </div>
 
@@ -126,6 +157,29 @@
     </div>
 
     <script>
+      var currentSettings = {
+        language: getLang(),
+        theme: "dark",
+        launchOnStartup: false,
+        minimizeToTray: true,
+        captureHotkey: "Ctrl+Shift+W"
+      };
+
+      function tauriInvoke(command, args) {
+        var tauri = window.__TAURI__;
+        var core = tauri && (tauri.core || tauri);
+        if (!core || !core.invoke) {
+          return Promise.reject("Tauri API is unavailable");
+        }
+        return core.invoke(command, args);
+      }
+
+      function tauriListen(eventName, callback) {
+        var eventApi = window.__TAURI__ && window.__TAURI__.event;
+        if (!eventApi || !eventApi.listen) return;
+        eventApi.listen(eventName, callback);
+      }
+
       // ─── i18n ──────────────────────────────────────────
       var LOCALE = {
         en: {
@@ -170,16 +224,49 @@
         document.getElementById("saveBtn").textContent = t("save");
       }
       applyLang();
+      applyTheme(currentSettings.theme);
+
+      function resolveTheme(theme) {
+        if (theme === "system") {
+          return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        }
+        return theme === "light" ? "light" : "dark";
+      }
+
+      function applyTheme(theme) {
+        document.documentElement.dataset.themePreference = theme;
+        document.documentElement.dataset.theme = resolveTheme(theme);
+      }
+
+      if (window.matchMedia) {
+        window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", function() {
+          if (currentSettings.theme === "system") applyTheme(currentSettings.theme);
+        });
+      }
+
+      function setStatus(message, isError) {
+        var statusBar = document.getElementById("statusBar");
+        statusBar.textContent = message;
+        statusBar.className = isError ? "status error" : "status";
+      }
+
+      function applySettings(settings) {
+        currentSettings = settings;
+        location.hash = "lang=" + settings.language;
+        document.getElementById("langSelect").value = settings.language;
+        document.getElementById("themeSelect").value = settings.theme;
+        document.getElementById("launchStartup").checked = settings.launchOnStartup;
+        document.getElementById("minimizeTray").checked = settings.minimizeToTray;
+        document.getElementById("hotkeyDisplay").textContent = settings.captureHotkey;
+        applyLang();
+        applyTheme(settings.theme);
+      }
 
       // ─── Load settings ────────────────────────────────
       function loadSettings() {
         if (window.__TAURI__) {
-          window.__TAURI__.invoke("get_settings").then(function(s) {
-            document.getElementById("langSelect").value = s.language;
-            document.getElementById("themeSelect").value = s.theme;
-            document.getElementById("launchStartup").checked = s.launchOnStartup;
-            document.getElementById("minimizeTray").checked = s.minimizeToTray;
-            document.getElementById("hotkeyDisplay").textContent = s.captureHotkey;
+          tauriInvoke("get_settings").then(function(s) {
+            applySettings(s);
           }).catch(function(e) {
             console.error("Failed to load settings:", e);
           });
@@ -188,24 +275,35 @@
 
       // ─── Save settings ────────────────────────────────
       document.getElementById("saveBtn").addEventListener("click", function() {
-        var lang = document.getElementById("langSelect").value;
+        var settings = {
+          language: document.getElementById("langSelect").value,
+          theme: document.getElementById("themeSelect").value,
+          launchOnStartup: document.getElementById("launchStartup").checked,
+          minimizeToTray: document.getElementById("minimizeTray").checked,
+          captureHotkey: currentSettings.captureHotkey || document.getElementById("hotkeyDisplay").textContent
+        };
+
         if (window.__TAURI__) {
-          window.__TAURI__.invoke("set_language", { lang: lang }).then(function() {
-            var statusBar = document.getElementById("statusBar");
-            statusBar.textContent = t("saved");
-            applyLang();
-            setTimeout(function() { statusBar.textContent = ""; }, 2000);
+          tauriInvoke("set_settings", { settings: settings }).then(function(saved) {
+            applySettings(saved);
+            setStatus(t("saved"), false);
+            setTimeout(function() { setStatus("", false); }, 2000);
           }).catch(function(e) {
-            document.getElementById("statusBar").textContent = t("error") + ": " + e;
+            setStatus(t("error") + ": " + e, true);
           });
         }
       });
 
       // Listen for language changes
       if (window.__TAURI__) {
-        window.__TAURI__.event.listen("language-changed", function(evt) {
+        tauriListen("language-changed", function(evt) {
           location.hash = "lang=" + evt.payload;
+          currentSettings.language = evt.payload;
+          document.getElementById("langSelect").value = evt.payload;
           applyLang();
+        });
+        tauriListen("settings-changed", function(evt) {
+          applySettings(evt.payload);
         });
       }
 

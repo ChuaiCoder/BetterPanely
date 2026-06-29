@@ -6,6 +6,10 @@ export async function getSettings(): Promise<AppSettings> {
   return invoke("get_settings");
 }
 
+export async function setSettings(settings: AppSettings): Promise<AppSettings> {
+  return invoke("set_settings", { settings });
+}
+
 export async function getLanguage(): Promise<string> {
   return invoke("get_language");
 }
@@ -18,4 +22,10 @@ export function onLanguageChanged(
   callback: (lang: string) => void
 ): Promise<UnlistenFn> {
   return listen<string>("language-changed", (event) => callback(event.payload));
+}
+
+export function onSettingsChanged(
+  callback: (settings: AppSettings) => void
+): Promise<UnlistenFn> {
+  return listen<AppSettings>("settings-changed", (event) => callback(event.payload));
 }

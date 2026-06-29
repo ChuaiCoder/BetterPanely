@@ -35,6 +35,7 @@ class TestWorkbenchRuntimeShape:
 
         assert "commands::workbench_cmds::wb_add_thumbnail" in lib_rs
         assert "commands::workbench_cmds::wb_update_thumbnail_rect" in lib_rs
+        assert "commands::settings_cmds::set_settings" in lib_rs
         assert "commands::settings_cmds::open_settings" in lib_rs
 
         forbidden = [
@@ -62,13 +63,14 @@ class TestWorkbenchRuntimeShape:
         workbench_cmds = (
             repo_root / "src-tauri/src/commands/workbench_cmds.rs"
         ).read_text(encoding="utf-8")
+        compact_workbench_cmds = "".join(workbench_cmds.split())
 
         assert "DwmRegisterThumbnail" in dwm_rs
         assert "DwmUpdateThumbnailProperties" in dwm_rs
         assert "DwmUnregisterThumbnail" in dwm_rs
         assert "DWM_TNP_RECTDESTINATION" in manager_rs
         assert "get_webview_window(\"main\")" in workbench_cmds
-        assert "thumbnail_manager.register(dest_hwnd, source_hwnd" in workbench_cmds
+        assert ".register(dest_hwnd,source_hwnd,&panel_id)" in compact_workbench_cmds
 
     def test_thumbnail_source_lifetime_is_checked(self, repo_root):
         manager_rs = (repo_root / "src-tauri/src/thumbnail/manager.rs").read_text(
@@ -146,6 +148,16 @@ class TestWorkbenchPersistenceShape:
             repo_root / "src-tauri/capabilities/default.json"
         ).read_text(encoding="utf-8")
         state_rs = (repo_root / "src-tauri/src/state.rs").read_text(encoding="utf-8")
+        settings_cmds = (
+            repo_root / "src-tauri/src/commands/settings_cmds.rs"
+        ).read_text(encoding="utf-8")
+        lib_rs = (repo_root / "src-tauri/src/lib.rs").read_text(encoding="utf-8")
+        main_tsx = (repo_root / "src/main.tsx").read_text(encoding="utf-8")
+        settings_api = (repo_root / "src/lib/settings-api.ts").read_text(
+            encoding="utf-8"
+        )
+        theme_ts = (repo_root / "src/lib/theme.ts").read_text(encoding="utf-8")
+        app_css = (repo_root / "src/App.css").read_text(encoding="utf-8")
         settings_html = (repo_root / "src/tools/settings/index.html").read_text(
             encoding="utf-8"
         )
@@ -159,3 +171,27 @@ class TestWorkbenchPersistenceShape:
         assert "s.launchOnStartup" in settings_html
         assert "s.minimizeToTray" in settings_html
         assert "s.captureHotkey" in settings_html
+        assert "set_settings" in settings_cmds
+        assert "settings.normalized()" in settings_cmds
+        assert "apply_launch_on_startup(settings.launch_on_startup)" in settings_cmds
+        assert '"settings-changed"' in settings_cmds
+        assert "RegSetValueExW" in settings_cmds
+        assert "RegDeleteValueW" in settings_cmds
+        assert "WindowEvent::CloseRequested" in lib_rs
+        assert "minimize_to_tray" in lib_rs
+        assert "window.hide()" in lib_rs
+        assert "commands::settings_cmds::set_settings" in lib_rs
+        assert "getSettings" in main_tsx
+        assert "onSettingsChanged" in main_tsx
+        assert "applyAppTheme" in main_tsx
+        assert "setSettings(settings: AppSettings)" in settings_api
+        assert "settings-changed" in settings_api
+        assert "dataset.theme" in theme_ts
+        assert 'theme === "system"' in theme_ts
+        assert ':root[data-theme="light"]' in app_css
+        assert "var(--app-bg-start)" in app_css
+        assert "tauri.core || tauri" in settings_html
+        assert 'tauriInvoke("set_settings", { settings: settings })' in settings_html
+        assert "launchOnStartup:" in settings_html
+        assert "minimizeToTray:" in settings_html
+        assert "captureHotkey:" in settings_html

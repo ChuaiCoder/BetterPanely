@@ -52,6 +52,38 @@ impl Default for AppSettings {
     }
 }
 
+impl AppSettings {
+    pub fn normalized(mut self) -> Self {
+        self.language = normalize_language(&self.language);
+        self.theme = normalize_theme(&self.theme);
+        self.capture_hotkey = normalize_capture_hotkey(&self.capture_hotkey);
+        self
+    }
+}
+
+fn normalize_language(lang: &str) -> String {
+    match lang {
+        "zh" | "zh-CN" | "zh_CN" | "chinese" => "zh".into(),
+        _ => "en".into(),
+    }
+}
+
+fn normalize_theme(theme: &str) -> String {
+    match theme {
+        "light" | "system" => theme.into(),
+        _ => "dark".into(),
+    }
+}
+
+fn normalize_capture_hotkey(hotkey: &str) -> String {
+    let trimmed = hotkey.trim();
+    if trimmed.is_empty() {
+        AppSettings::default().capture_hotkey
+    } else {
+        trimmed.into()
+    }
+}
+
 /// Manages state persistence to disk
 pub struct AppStateManager {
     state_path: PathBuf,
@@ -72,14 +104,17 @@ impl AppStateManager {
         &self.settings
     }
 
+    /// Replace all settings after normalizing external values.
+    pub fn set_settings(&mut self, settings: AppSettings) -> AppSettings {
+        self.settings = settings.normalized();
+        self.settings.clone()
+    }
+
     /// Set language and return the new language code
     pub fn set_language(&mut self, lang: &str) -> Result<String, Box<dyn std::error::Error>> {
-        let normalized = match lang {
-            "zh" | "zh-CN" | "zh_CN" | "chinese" => "zh",
-            _ => "en",
-        };
-        self.settings.language = normalized.to_string();
-        Ok(normalized.to_string())
+        let normalized = normalize_language(lang);
+        self.settings.language = normalized.clone();
+        Ok(normalized)
     }
 
     /// Get current language
@@ -107,10 +142,7 @@ impl AppStateManager {
     }
 
     /// Load state from disk and restore settings
-    pub fn load(
-        &mut self,
-        _app_handle: &AppHandle,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load(&mut self, _app_handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         if !self.state_path.exists() {
             log::info!("No saved state found at {:?}", self.state_path);
             return Ok(());
@@ -120,7 +152,7 @@ impl AppStateManager {
         let persisted: PersistedState = serde_json::from_str(&json)?;
 
         // Restore settings
-        self.settings = persisted.settings;
+        self.settings = persisted.settings.normalized();
 
         log::info!("Loaded settings from {:?}", self.state_path);
 
@@ -155,7 +187,10 @@ fn dirs_appdata() -> PathBuf {
     PathBuf::from(".")
 }
 
-pub fn save_layout(app: AppHandle, panels: &[SavedPanel]) -> Result<(), Box<dyn std::error::Error>> {
+pub fn save_layout(
+    app: AppHandle,
+    panels: &[SavedPanel],
+) -> Result<(), Box<dyn std::error::Error>> {
     let data_dir = app.path().data_dir()?;
     let layout_path = data_dir.join("workbench_layout.json");
 
