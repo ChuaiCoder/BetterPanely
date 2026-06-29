@@ -1,0 +1,182 @@
+use tauri::{State, AppHandle, Manager};
+use crate::thumbnail::SharedThumbnailManager;
+use crate::window_embedder::enumerator;
+use crate::state::SavedPanel;
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize)]
+pub struct WindowInfo {
+    pub hwnd: isize,
+    pub title: String,
+    pub exe_path: String,
+    pub class_name: String,
+    pub is_compatible: bool,
+    pub incompatibility_reason: Option<String>,
+    pub pid: u32,
+    pub rect: RectInfo,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RectInfo {
+    pub left: i32,
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
+}
+
+fn to_window_info(w: enumerator::WindowInfo) -> WindowInfo {
+    WindowInfo {
+        hwnd: w.hwnd as isize,
+        title: w.title,
+        exe_path: w.exe_path,
+        class_name: w.class_name,
+        is_compatible: w.is_compatible,
+        incompatibility_reason: w.incompatibility_reason,
+        pid: w.pid,
+        rect: RectInfo {
+            left: w.rect.left,
+            top: w.rect.top,
+            right: w.rect.right,
+            bottom: w.rect.bottom,
+        },
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn get_workbench_hwnd(app: &AppHandle) -> Result<isize, String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Workbench window not found".to_string())?;
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+    Ok(hwnd.0 as isize)
+}
+
+#[tauri::command]
+pub fn wb_enumerate_windows() -> Result<Vec<WindowInfo>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let windows = enumerator::enumerate_windows().map_err(|e| e.to_string())?;
+        Ok(windows.into_iter().map(to_window_info).collect())
+    }
+    #[cfg(not(target_os = "windows"))]
+    Ok(vec![])
+}
+
+#[tauri::command]
+pub fn wb_capture_window_under_cursor() -> Result<Option<WindowInfo>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let Some((source_hwnd, _title)) = crate::drag_capture::hotkey::get_window_under_cursor()
+        else {
+            return Ok(None);
+        };
+
+        let windows = enumerator::enumerate_windows().map_err(|e| e.to_string())?;
+        let Some(info) = windows.into_iter().find(|w| w.hwnd == source_hwnd) else {
+            return Err("Window under cursor is not eligible for capture".to_string());
+        };
+
+        if !info.is_compatible {
+            return Err(format!(
+                "Window is not compatible: {}",
+                info.incompatibility_reason
+                    .as_deref()
+                    .unwrap_or("Unknown reason")
+            ));
+        }
+
+        Ok(Some(to_window_info(info)))
+    }
+    #[cfg(not(target_os = "windows"))]
+    Ok(None)
+}
+
+#[tauri::command]
+pub fn wb_add_thumbnail(
+    source_hwnd: isize,
+    app: AppHandle,
+    thumbnail_manager: State<'_, SharedThumbnailManager>,
+) -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    let dest_hwnd = get_workbench_hwnd(&app)?;
+    #[cfg(not(target_os = "windows"))]
+    let dest_hwnd = 0;
+
+    if source_hwnd == 0 {
+        return Err("Source HWND is invalid".to_string());
+    }
+    if source_hwnd == dest_hwnd {
+        return Err("Cannot capture the workbench window itself".to_string());
+    }
+
+    let panel_id = thumbnail_manager.next_panel_id();
+    thumbnail_manager.register(dest_hwnd, source_hwnd, &panel_id)
+        .map_err(|e| e.to_string())?;
+    Ok(panel_id)
+}
+
+#[tauri::command]
+pub fn wb_update_thumbnail_rect(
+    panel_id: String,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    thumbnail_manager: State<'_, SharedThumbnailManager>,
+) -> Result<(), String> {
+    thumbnail_manager.update_rect(
+        &panel_id,
+        x as i32,
+        y as i32,
+        width as i32,
+        height as i32,
+    ).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn wb_remove_panel(
+    panel_id: String,
+    thumbnail_manager: State<'_, SharedThumbnailManager>,
+) -> Result<(), String> {
+    thumbnail_manager.unregister(&panel_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn wb_focus_source(source_hwnd: isize) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
+        unsafe {
+            let hwnd = windows::Win32::Foundation::HWND(source_hwnd as *mut _);
+            let result = SetForegroundWindow(hwnd);
+            if !result.as_bool() {
+                return Err("Failed to set foreground window".to_string());
+            }
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    Ok(())
+}
+
+#[tauri::command]
+pub fn wb_get_workbench_hwnd(app: AppHandle) -> Result<isize, String> {
+    #[cfg(target_os = "windows")]
+    return get_workbench_hwnd(&app);
+
+    #[cfg(not(target_os = "windows"))]
+    Err("Workbench HWND is only available on Windows".to_string())
+}
+
+#[tauri::command]
+pub fn wb_save_layout(
+    panels: Vec<SavedPanel>,
+    app: AppHandle,
+) -> Result<(), String> {
+    crate::state::save_layout(app, &panels).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn wb_load_layout(app: AppHandle) -> Result<Vec<SavedPanel>, String> {
+    crate::state::load_layout(app).map_err(|e| e.to_string())
+}

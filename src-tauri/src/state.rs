@@ -2,7 +2,7 @@ use crate::panel_manager::PanelManager;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 /// Persisted application state
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -23,6 +23,21 @@ pub struct PersistedPanel {
     pub height: f64,
     pub always_on_top: bool,
     pub opacity: f64,
+}
+
+/// Workbench panel layout for persistence
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SavedPanel {
+    pub id: String,
+    pub panel_type: String,
+    pub source_hwnd: Option<isize>,
+    pub tool_id: Option<String>,
+    pub title: String,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub z_index: i32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -185,4 +200,35 @@ fn dirs_appdata() -> PathBuf {
     }
 
     PathBuf::from(".")
+}
+
+pub fn save_layout(app: AppHandle, panels: &[SavedPanel]) -> Result<(), Box<dyn std::error::Error>> {
+    let data_dir = app.path().data_dir()?;
+    let layout_path = data_dir.join("workbench_layout.json");
+
+    if let Some(parent) = layout_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let json = serde_json::to_string_pretty(panels)?;
+    fs::write(&layout_path, json)?;
+
+    log::info!("Workbench layout saved to {:?}", layout_path);
+    Ok(())
+}
+
+pub fn load_layout(app: AppHandle) -> Result<Vec<SavedPanel>, Box<dyn std::error::Error>> {
+    let data_dir = app.path().data_dir()?;
+    let layout_path = data_dir.join("workbench_layout.json");
+
+    if !layout_path.exists() {
+        log::info!("No saved workbench layout found at {:?}", layout_path);
+        return Ok(vec![]);
+    }
+
+    let json = fs::read_to_string(&layout_path)?;
+    let panels: Vec<SavedPanel> = serde_json::from_str(&json)?;
+
+    log::info!("Loaded {} panels from workbench layout", panels.len());
+    Ok(panels)
 }

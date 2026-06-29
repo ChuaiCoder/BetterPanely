@@ -1,7 +1,7 @@
 /** Panel type discriminator */
 export type PanelType =
   | { type: "tool"; toolId: string }
-  | { type: "embedded"; embedInfo: EmbedInfo };
+  | { type: "embedded"; embedInfo: EmbedInfo | null };
 
 /** Information about an embedded window */
 export interface EmbedInfo {
@@ -25,6 +25,28 @@ export interface Panel {
   alwaysOnTop: boolean;
   opacity: number;
   clickThrough: boolean;
+}
+
+/** Workbench panel state */
+export interface PanelState {
+  id: string;
+  type: "thumbnail" | "tool";
+  sourceHwnd?: number;
+  toolId?: string;
+  title: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  zIndex: number;
+  visible: boolean;
+}
+
+/** Snap guide for magnetic alignment */
+export interface SnapGuide {
+  type: "vertical" | "horizontal";
+  position: number;
+  targetPanelId: string;
 }
 
 /** An enumerated window from the system */

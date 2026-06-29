@@ -3,7 +3,7 @@ use crate::panel_manager::panel::{Panel, PanelType};
 use crate::AppState;
 use tauri::{command, AppHandle, Emitter, Manager, State};
 
-/// Launch a built-in tool as a new tool panel
+/// Launch a built-in tool as a new tool panel (async — WebView creation is slow)
 #[command]
 pub async fn launch_tool(
     app_handle: AppHandle,
@@ -12,10 +12,11 @@ pub async fn launch_tool(
     x: Option<f64>,
     y: Option<f64>,
 ) -> Result<Panel, String> {
-    // Get current language
-    let state_mgr = state.state_manager.lock().map_err(|e| e.to_string())?;
-    let lang = state_mgr.get_language();
-    drop(state_mgr);
+    // Get current language (drop lock before acquiring panel_manager)
+    let lang = {
+        let state_mgr = state.state_manager.lock().map_err(|e| e.to_string())?;
+        state_mgr.get_language()
+    };
 
     // Verify the tool exists with localized names
     let tools = crate::builtin_tools::get_builtin_tools(&lang);
@@ -34,19 +35,15 @@ pub async fn launch_tool(
         .create(tool.name.clone(), panel_type.clone(), None, None)
         .clone();
 
-    // Override position if provided
-    if let Some(px) = x {
-        panel.x = px;
-    }
-    if let Some(py) = y {
-        panel.y = py;
-    }
+    // Override position if provided — must set BEFORE creating webview
+    if let Some(px) = x { panel.x = px; }
+    if let Some(py) = y { panel.y = py; }
 
     // Create the WebView with language
     let panel_mut = manager.get_mut(&panel.id).ok_or("Panel not found after creation")?;
-    panel_mut.create_webview(&app_handle, &tool.url, &lang).map_err(|e| e.to_string())?;
     panel_mut.x = panel.x;
     panel_mut.y = panel.y;
+    panel_mut.create_webview(&app_handle, &tool.url, &lang).map_err(|e| e.to_string())?;
 
     let updated = panel_mut.clone();
     drop(manager);
@@ -73,9 +70,10 @@ pub async fn save_state(
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    // Lock panel_manager first, then state_manager (consistent ordering with create_panel)
+    let panel_mgr = state.panel_manager.lock().map_err(|e| e.to_string())?;
     let state_mgr = state.state_manager.lock().map_err(|e| e.to_string())?;
-    let manager = state.panel_manager.lock().map_err(|e| e.to_string())?;
-    state_mgr.save(&app_handle, &manager).map_err(|e| e.to_string())
+    state_mgr.save(&app_handle, &panel_mgr).map_err(|e| e.to_string())
 }
 
 /// Load application state from disk
@@ -88,7 +86,7 @@ pub async fn load_state(
     state_mgr.load(&app_handle).map_err(|e| e.to_string())
 }
 
-/// Open the settings page in a new WebView window
+/// Open the settings page (async — WebView creation is slow)
 #[command]
 pub async fn open_settings(
     app_handle: AppHandle,
@@ -98,7 +96,7 @@ pub async fn open_settings(
     let lang = state_mgr.get_language();
     drop(state_mgr);
 
-    let url = format!("src/tools/settings/index.html?lang={}", lang);
+    let url = format!("src/tools/settings/index.html#lang={}", lang);
     let label = "settings_window";
 
     // Check if settings window already exists

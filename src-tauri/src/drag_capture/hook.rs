@@ -11,6 +11,8 @@ use windows::{
 
 use tauri::Emitter;
 
+use std::collections::HashMap;
+
 /// Shared state between the capture thread and the main app
 pub struct DragCaptureState {
     pub active: AtomicBool,
@@ -20,8 +22,8 @@ pub struct DragCaptureState {
     pub containers: Mutex<Vec<isize>>,
     /// Current hovered container (for highlighting)
     pub hovered_container: Mutex<Option<isize>>,
-    /// Last dragged window info (for auto-embed on drop)
-    pub last_drag_source: Mutex<Option<(isize, String)>>,
+    /// Container HWND → Panel ID mapping (for auto-embed)
+    pub container_panel_map: Mutex<HashMap<isize, String>>,
 }
 
 impl DragCaptureState {
@@ -31,13 +33,16 @@ impl DragCaptureState {
             dragged_hwnd: Mutex::new(None),
             containers: Mutex::new(Vec::new()),
             hovered_container: Mutex::new(None),
-            last_drag_source: Mutex::new(None),
+            container_panel_map: Mutex::new(HashMap::new()),
         })
     }
 
-    pub fn register_container(&self, hwnd: isize) {
+    pub fn register_container(&self, hwnd: isize, panel_id: &str) {
         if let Ok(mut c) = self.containers.lock() {
             if !c.contains(&hwnd) { c.push(hwnd); }
+        }
+        if let Ok(mut m) = self.container_panel_map.lock() {
+            m.insert(hwnd, panel_id.to_string());
         }
     }
 
@@ -45,16 +50,9 @@ impl DragCaptureState {
         if let Ok(mut c) = self.containers.lock() {
             c.retain(|&h| h != hwnd);
         }
-    }
-
-    /// Check for auto-embed: if a drag just ended over a container, return (source_hwnd, container_hwnd)
-    pub fn take_auto_embed(&self) -> Option<(isize, isize)> {
-        let hover = self.hovered_container.lock().ok()?;
-        let hover_hwnd = (*hover)?;
-        let source = self.last_drag_source.lock().ok()?;
-        source.as_ref()?;
-        let src_hwnd = source.as_ref().unwrap().0;
-        Some((src_hwnd, hover_hwnd))
+        if let Ok(mut m) = self.container_panel_map.lock() {
+            m.remove(&hwnd);
+        }
     }
 }
 
@@ -73,6 +71,10 @@ pub fn start_drag_capture(
     let app = app_handle.clone();
 
     thread::spawn(move || unsafe {
+        // Set thread-local state INSIDE the spawned thread so the hook callback can access them
+        set_thread_drag_state(Some(active_ref.clone()));
+        set_thread_app_handle(Some(app.clone()));
+
         // Install hooks for window move/size start and end
         let hook_start = SetWinEventHook(
             EVENT_SYSTEM_MOVESIZESTART,
@@ -112,11 +114,11 @@ pub fn start_drag_capture(
                         let root = GetAncestor(hwnd_under, GA_ROOT);
                         let check_hwnd = if root.0.is_null() { hwnd_under.0 } else { root.0 };
 
-                        let containers = active_ref.containers.lock().unwrap();
-                        let new_hover = containers.iter().find(|&&h| h == check_hwnd as isize).copied();
+                        // Check hover — drop lock before emitting events
+                        let new_hover = active_ref.containers.lock().ok()
+                            .and_then(|c| c.iter().find(|&&h| h == check_hwnd as isize).copied());
 
                         if new_hover != last_hover {
-                            // Emit events for highlight
                             if let Some(prev) = last_hover {
                                 let _ = app.emit("panel:drag-leave", prev);
                             }
@@ -176,9 +178,6 @@ unsafe extern "system" fn win_event_callback(
             if let Ok(mut d) = state.dragged_hwnd.lock() {
                 *d = Some(target_hwnd);
             }
-            if let Ok(mut src) = state.last_drag_source.lock() {
-                *src = Some((target_hwnd, title));
-            }
             // Emit drag-start to frontend
             APP_HANDLE.with(|a| {
                 if let Some(app) = a.borrow().as_ref() {
@@ -191,18 +190,27 @@ unsafe extern "system" fn win_event_callback(
             if let Ok(mut d) = state.dragged_hwnd.lock() {
                 *d = None;
             }
+            // Check if dropped over a container — auto-embed!
             let hover = state.hovered_container.lock().ok().and_then(|h| *h);
-            let title2 = title_clone.clone();
+            let panel_id = hover.and_then(|hwnd| {
+                state.container_panel_map.lock().ok()
+                    .and_then(|m| m.get(&hwnd).cloned())
+            });
             APP_HANDLE.with(|a| {
                 if let Some(app) = a.borrow().as_ref() {
+                    if let (Some(src_hwnd), Some(pid)) = (Some(target_hwnd), panel_id) {
+                        // Auto-embed: tell frontend to embed this window
+                        let _ = app.emit("drag:auto-embed", serde_json::json!({
+                            "panelId": pid,
+                            "sourceHwnd": src_hwnd
+                        }));
+                    }
                     let _ = app.emit("drag:ended", serde_json::json!({
                         "hwnd": target_hwnd,
-                        "hoveredContainer": hover,
-                        "title": title2
+                        "title": title_clone
                     }));
                 }
             });
-            // Reset hover after drag ends
             if let Ok(mut h) = state.hovered_container.lock() { *h = None; }
         }
     });

@@ -10,7 +10,18 @@
         font-family: "Segoe UI", system-ui, sans-serif;
         background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
         color: #e0e0e0; height: 100vh; display: flex; flex-direction: column;
-        align-items: center; padding: 20px;
+        overflow: hidden;
+      }
+      .titlebar {
+        height: 28px; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.3); cursor: grab;
+        font-size: 11px; color: #777; letter-spacing: 1px;
+      }
+      .titlebar:active { cursor: grabbing; }
+      .content {
+        flex: 1; display: flex; flex-direction: column;
+        align-items: center; padding: 16px; overflow-y: auto;
       }
       .search-box { display: flex; gap: 8px; width: 100%; margin-bottom: 16px; }
       .search-box input {
@@ -43,6 +54,10 @@
     </style>
   </head>
   <body>
+    <div class="titlebar" data-tauri-drag-region>
+      <span id="titlebarText">Weather</span>
+    </div>
+    <div class="content">
     <div class="search-box">
       <input type="text" id="cityInput" placeholder="Enter city name..." value="Beijing">
       <button id="searchBtn">Search</button>
@@ -68,6 +83,7 @@
       </div>
     </div>
     <div class="loading" id="loading">Loading weather...</div>
+    </div>
 
     <script>
       // ─── i18n ──────────────────────────────────────────
@@ -84,12 +100,13 @@
         }
       };
       function getLang() {
-        var m = location.search.match(/[?&]lang=([^&]+)/);
+        var m = location.hash.match(/lang=([^&]+)/);
         return (m && m[1] === "zh") ? "zh" : "en";
       }
       function t(key) { return (LOCALE[getLang()] || LOCALE.en)[key] || key; }
       function applyLang() {
         document.title = t("title");
+        document.getElementById("titlebarText").textContent = t("title");
         document.getElementById("searchBtn").textContent = t("search");
         document.getElementById("cityInput").placeholder = t("placeholder");
         document.getElementById("lblHumidity").textContent = t("humidity");
@@ -104,9 +121,7 @@
       if (window.__TAURI__) {
         window.__TAURI__.event.listen("language-changed", function(evt) {
           var lang = evt.payload;
-          var url = new URL(location.href);
-          url.searchParams.set("lang", lang);
-          history.replaceState(null, "", url.toString());
+          location.hash = "lang=" + lang;
           applyLang();
         });
       }

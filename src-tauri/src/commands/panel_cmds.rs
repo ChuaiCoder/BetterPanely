@@ -2,7 +2,7 @@ use crate::panel_manager::panel::{Panel, PanelType};
 use crate::AppState;
 use tauri::{command, AppHandle, Emitter, State};
 
-/// Create a new panel
+/// Create a new panel (async — WebView creation is slow; container uses main-thread dispatch)
 #[command]
 pub async fn create_panel(
     app_handle: AppHandle,
@@ -12,8 +12,10 @@ pub async fn create_panel(
     width: Option<f64>,
     height: Option<f64>,
 ) -> Result<Panel, String> {
+    log::info!("[create_panel] title={}, type={:?}", title, panel_type);
     let mut manager = state.panel_manager.lock().map_err(|e| e.to_string())?;
     let panel = manager.create(title.clone(), panel_type.clone(), width, height).clone();
+    log::info!("[create_panel] panel created in manager: id={}", panel.id);
 
     // Get current language
     let state_mgr = state.state_manager.lock().map_err(|e| e.to_string())?;
@@ -35,21 +37,28 @@ pub async fn create_panel(
             panel_mut.create_webview(&app_handle, url, &lang).map_err(|e| e.to_string())?;
         }
         PanelType::Embedded { .. } => {
-            // Create a native Win32 container window
+            // Container window must be created on main thread (Win32 rule).
+            // Dispatch via run_on_main_thread + channel to get the HWND back.
             #[cfg(target_os = "windows")]
             {
-                let hwnd = crate::panel_manager::container::create_container(
-                    panel.x,
-                    panel.y,
-                    panel.width,
-                    panel.height,
-                    &panel.title,
-                )
-                .map_err(|e| e.to_string())?;
+                let px = panel.x; let py = panel.y;
+                let pw = panel.width; let ph = panel.height;
+                let ptitle = panel.title.clone();
+                let drag_state = state.drag_capture.clone();
+                let pid = panel.id.clone();
+
+                let (tx, rx) = std::sync::mpsc::channel::<Result<isize, String>>();
+                app_handle.run_on_main_thread(move || {
+                    let result = crate::panel_manager::container::create_container(
+                        px, py, pw, ph, &ptitle,
+                    ).map_err(|e| e.to_string());
+                    let _ = tx.send(result);
+                }).map_err(|e| e.to_string())?;
+
+                let hwnd = rx.recv().map_err(|e| e.to_string())??;
                 panel_mut.container_hwnd = Some(hwnd);
-                // Register with drag capture
-                if let Some(ref drag) = state.drag_capture {
-                    drag.register_container(hwnd);
+                if let Some(ref drag) = drag_state {
+                    drag.register_container(hwnd, &pid);
                 }
             }
         }
@@ -64,9 +73,9 @@ pub async fn create_panel(
     Ok(updated)
 }
 
-/// Destroy a panel
+/// Destroy a panel (sync — runs on main thread for Win32 safety)
 #[command]
-pub async fn destroy_panel(
+pub fn destroy_panel(
     app_handle: AppHandle,
     state: State<'_, AppState>,
     panel_id: String,
@@ -110,9 +119,9 @@ pub async fn get_panel(
     manager.get(&panel_id).cloned().ok_or("Panel not found".into())
 }
 
-/// Move a panel
+/// Move a panel (sync — Win32 SetWindowPos must run on main thread)
 #[command]
-pub async fn move_panel(
+pub fn move_panel(
     state: State<'_, AppState>,
     panel_id: String,
     x: f64,
@@ -134,7 +143,7 @@ pub async fn move_panel(
 
 /// Resize a panel
 #[command]
-pub async fn resize_panel(
+pub fn resize_panel(
     state: State<'_, AppState>,
     panel_id: String,
     width: f64,
@@ -156,7 +165,7 @@ pub async fn resize_panel(
 
 /// Toggle always-on-top for a panel
 #[command]
-pub async fn set_panel_always_on_top(
+pub fn set_panel_always_on_top(
     state: State<'_, AppState>,
     panel_id: String,
     always_on_top: bool,
@@ -185,7 +194,7 @@ pub async fn set_panel_always_on_top(
 
 /// Set panel opacity
 #[command]
-pub async fn set_panel_opacity(
+pub fn set_panel_opacity(
     state: State<'_, AppState>,
     panel_id: String,
     opacity: f64,
@@ -201,10 +210,17 @@ pub async fn set_panel_opacity(
         use windows::Win32::Foundation::HWND;
         unsafe {
             let h = HWND(hwnd as *mut std::ffi::c_void);
-            let ex_style = GetWindowLongPtrW(h, GWL_EXSTYLE) as u32;
-            let _ = SetWindowLongPtrW(h, GWL_EXSTYLE, (ex_style | WS_EX_LAYERED.0) as isize);
+            let mut ex_style = GetWindowLongPtrW(h, GWL_EXSTYLE) as u32;
+            if clamped >= 0.999 {
+                ex_style &= !WS_EX_LAYERED.0;
+            } else {
+                ex_style |= WS_EX_LAYERED.0;
+            }
+            let _ = SetWindowLongPtrW(h, GWL_EXSTYLE, ex_style as isize);
             let alpha = (clamped * 255.0) as u8;
             let _ = SetLayeredWindowAttributes(h, windows::Win32::Foundation::COLORREF(0), alpha, LWA_ALPHA);
+            let _ = SetWindowPos(h, HWND(std::ptr::null_mut()), 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
         }
     }
 
@@ -213,7 +229,7 @@ pub async fn set_panel_opacity(
 
 /// Toggle click-through for a panel
 #[command]
-pub async fn set_panel_click_through(
+pub fn set_panel_click_through(
     state: State<'_, AppState>,
     panel_id: String,
     click_through: bool,

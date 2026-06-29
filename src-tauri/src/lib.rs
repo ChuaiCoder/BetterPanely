@@ -6,18 +6,21 @@ mod builtin_tools;
 mod locales;
 mod state;
 mod tray;
+mod thumbnail;
 
 use panel_manager::PanelManager;
 use state::AppStateManager;
 use drag_capture::hook::DragCaptureState;
+use thumbnail::SharedThumbnailManager;
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 /// Application state shared across all handlers
 pub struct AppState {
     pub panel_manager: Mutex<PanelManager>,
     pub state_manager: Mutex<AppStateManager>,
     pub drag_capture: Option<Arc<DragCaptureState>>,
+    pub thumbnail_manager: SharedThumbnailManager,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -25,10 +28,12 @@ pub fn run() {
     env_logger::init();
 
     let drag_state = DragCaptureState::new();
+    let thumbnail_manager = SharedThumbnailManager::new();
     let app_state = AppState {
         panel_manager: Mutex::new(PanelManager::new()),
         state_manager: Mutex::new(AppStateManager::new()),
         drag_capture: Some(drag_state.clone()),
+        thumbnail_manager: thumbnail_manager.clone(),
     };
 
     tauri::Builder::default()
@@ -37,6 +42,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(app_state)
+        .manage(thumbnail_manager)
         .setup(|app| {
             log::info!("BetterPanely starting up...");
 
@@ -93,14 +99,19 @@ pub fn run() {
             tray::create_tray(app.handle(), &current_lang)?;
 
             // Register global hotkey for window capture (Ctrl+Shift+W)
+            // Emits event to main window; frontend calls the sync capture command on main thread
             #[cfg(target_os = "windows")]
             {
                 use tauri_plugin_global_shortcut::GlobalShortcutExt;
                 let app_handle = app.handle().clone();
-                let _ = app.global_shortcut().on_shortcut("Ctrl+Shift+W", move |_app, _shortcut, _event| {
-                    let state = app_handle.state::<AppState>();
-                    let _ = commands::embed_cmds::capture_window_via_hotkey_internal(&state);
-                });
+                match app.global_shortcut().on_shortcut("Ctrl+Shift+W", move |_app, _shortcut, _event| {
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.emit("tray:capture-hotkey", ());
+                    }
+                }) {
+                    Ok(_) => log::info!("Global shortcut Ctrl+Shift+W registered"),
+                    Err(e) => log::error!("Failed to register Ctrl+Shift+W: {}", e),
+                }
             }
 
             Ok(())
@@ -130,6 +141,15 @@ pub fn run() {
             commands::settings_cmds::get_settings,
             commands::settings_cmds::get_language,
             commands::settings_cmds::set_language,
+            commands::workbench_cmds::wb_enumerate_windows,
+            commands::workbench_cmds::wb_capture_window_under_cursor,
+            commands::workbench_cmds::wb_add_thumbnail,
+            commands::workbench_cmds::wb_update_thumbnail_rect,
+            commands::workbench_cmds::wb_remove_panel,
+            commands::workbench_cmds::wb_focus_source,
+            commands::workbench_cmds::wb_get_workbench_hwnd,
+            commands::workbench_cmds::wb_save_layout,
+            commands::workbench_cmds::wb_load_layout,
         ])
         .run(tauri::generate_context!())
         .expect("error while running BetterPanely");

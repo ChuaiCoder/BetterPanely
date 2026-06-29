@@ -27,18 +27,22 @@ pub async fn set_language(
     state: State<'_, AppState>,
     lang: String,
 ) -> Result<String, String> {
-    let mut state_mgr = state.state_manager.lock().map_err(|e| e.to_string())?;
-    let new_lang = state_mgr.set_language(&lang).map_err(|e| e.to_string())?;
+    // Step 1: Update language in state_manager
+    let new_lang = {
+        let mut state_mgr = state.state_manager.lock().map_err(|e| e.to_string())?;
+        let lang = state_mgr.set_language(&lang).map_err(|e| e.to_string())?;
+        drop(state_mgr);
+        lang
+    };
 
-    // Save state with new settings
-    let panel_mgr = state.panel_manager.lock().map_err(|e| e.to_string())?;
-    state_mgr.save(&app_handle, &panel_mgr).map_err(|e| e.to_string())?;
-    drop(panel_mgr);
-    drop(state_mgr);
+    // Step 2: Save panels + settings (lock panel_manager first, then state_manager briefly)
+    {
+        let panel_mgr = state.panel_manager.lock().map_err(|e| e.to_string())?;
+        let state_mgr = state.state_manager.lock().map_err(|e| e.to_string())?;
+        state_mgr.save(&app_handle, &panel_mgr).map_err(|e| e.to_string())?;
+    }
 
-    // Emit event so all windows react
     let _ = app_handle.emit("language-changed", &new_lang);
-
     log::info!("Language changed to: {}", new_lang);
     Ok(new_lang)
 }

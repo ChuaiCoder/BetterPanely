@@ -40,7 +40,9 @@ pub unsafe fn embed_with_setparent(
 
     // 3. Get container thread ID and attach input
     let container_thread_id = GetWindowThreadProcessId(container, None);
-    let _attached = AttachThreadInput(source_thread_id, container_thread_id, true);
+    if !AttachThreadInput(source_thread_id, container_thread_id, true).as_bool() {
+        log::warn!("AttachThreadInput failed for threads {} -> {}", source_thread_id, container_thread_id);
+    }
 
     // 4. Remove caption and border styles
     let new_style = original_style & !(WS_CAPTION.0 | WS_THICKFRAME.0);

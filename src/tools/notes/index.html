@@ -14,7 +14,9 @@
       .toolbar {
         display: flex; gap: 4px; padding: 8px;
         border-bottom: 1px solid #2a3a5c; flex-shrink: 0;
+        cursor: grab;
       }
+      .toolbar:active { cursor: grabbing; }
       .toolbar button {
         padding: 6px 10px; font-size: 13px; border: 1px solid #2a3a5c;
         border-radius: 4px; cursor: pointer; background: #1f2b47; color: #e0e0e0;
@@ -39,7 +41,7 @@
     </style>
   </head>
   <body>
-    <div class="toolbar">
+    <div class="toolbar" data-tauri-drag-region>
       <button id="btnBold" title="Bold"><b>B</b></button>
       <button id="btnItalic" title="Italic"><i>I</i></button>
       <button id="btnUnderline" title="Underline"><u>U</u></button>
@@ -72,7 +74,7 @@
         }
       };
       function getLang() {
-        var m = location.search.match(/[?&]lang=([^&]+)/);
+        var m = location.hash.match(/lang=([^&]+)/);
         return (m && m[1] === "zh") ? "zh" : "en";
       }
       function t(key) { return (LOCALE[getLang()] || LOCALE.en)[key] || key; }
@@ -94,9 +96,7 @@
       if (window.__TAURI__) {
         window.__TAURI__.event.listen("language-changed", function(evt) {
           var lang = evt.payload;
-          var url = new URL(location.href);
-          url.searchParams.set("lang", lang);
-          history.replaceState(null, "", url.toString());
+          location.hash = "lang=" + lang;
           applyLang();
         });
       }

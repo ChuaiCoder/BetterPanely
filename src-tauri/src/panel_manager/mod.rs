@@ -54,14 +54,13 @@ impl PanelManager {
     }
 
     /// Clean up all panels — restore embedded windows, close tool webviews
-    pub fn cleanup_all(
-        &mut self,
-        app_handle: &AppHandle,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    /// Continues cleanup even if individual panels fail
+    pub fn cleanup_all(&mut self, app_handle: &AppHandle) {
         for (_id, panel) in self.panels.iter_mut() {
-            panel.cleanup(app_handle)?;
+            if let Err(e) = panel.cleanup(app_handle) {
+                log::warn!("Failed to cleanup panel during shutdown: {}", e);
+            }
         }
         self.panels.clear();
-        Ok(())
     }
 }

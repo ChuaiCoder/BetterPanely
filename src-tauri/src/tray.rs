@@ -118,7 +118,7 @@ fn handle_tray_menu(app_handle: &AppHandle, menu_id: &str) {
                     let _ = w.set_focus();
                 }
             } else {
-                let url = format!("src/tools/settings/index.html?lang={}", lang);
+                let url = format!("src/tools/settings/index.html#lang={}", lang);
                 let _webview = WebviewWindowBuilder::new(
                     app_handle,
                     label,

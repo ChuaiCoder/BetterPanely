@@ -10,11 +10,21 @@
         font-family: "Segoe UI", system-ui, sans-serif;
         background: #1a1a2e;
         color: #e0e0e0;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
+        display: flex; flex-direction: column;
+        height: 100vh; overflow: hidden;
         user-select: none;
+      }
+      .titlebar {
+        height: 28px; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: #0f0f23; cursor: grab;
+        font-size: 11px; color: #555; letter-spacing: 1px;
+        user-select: none;
+      }
+      .titlebar:active { cursor: grabbing; }
+      .content {
+        flex: 1; display: flex; justify-content: center; align-items: center;
+        overflow: hidden;
       }
       .calculator { width: 100%; max-width: 280px; padding: 12px; }
       .display {
@@ -41,6 +51,10 @@
     </style>
   </head>
   <body>
+    <div class="titlebar" data-tauri-drag-region>
+      <span id="titlebarText">Calculator</span>
+    </div>
+    <div class="content">
     <div class="calculator">
       <div class="display" id="display">0</div>
       <div class="buttons">
@@ -64,6 +78,7 @@
         <button class="equals span2" id="equals">=</button>
       </div>
     </div>
+    </div>
     <script>
       // ─── i18n ──────────────────────────────────────────
       var LOCALE = {
@@ -71,22 +86,20 @@
         zh: { title: "计算器", clear: "清空", error: "错误" }
       };
       function getLang() {
-        var m = location.search.match(/[?&]lang=([^&]+)/);
+        var m = location.hash.match(/lang=([^&]+)/);
         return (m && m[1] === "zh") ? "zh" : "en";
       }
       function t(key) { return (LOCALE[getLang()] || LOCALE.en)[key] || key; }
       function applyLang() {
         document.title = t("title");
+        document.getElementById("titlebarText").textContent = t("title");
         document.getElementById("clear").textContent = t("clear");
       }
 
       // Listen for language changes from Tauri
       if (window.__TAURI__) {
         window.__TAURI__.event.listen("language-changed", function(evt) {
-          var lang = evt.payload;
-          var url = new URL(location.href);
-          url.searchParams.set("lang", lang);
-          history.replaceState(null, "", url.toString());
+          location.hash = "lang=" + evt.payload;
           applyLang();
         });
       }

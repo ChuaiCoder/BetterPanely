@@ -4,31 +4,6 @@ use windows::{
     Win32::Foundation::*,
 };
 
-/// Start hotkey-based window capture mode
-/// User presses Ctrl+Shift+W, then clicks on a window to capture it
-#[cfg(target_os = "windows")]
-pub fn start_hotkey_capture() -> Result<(), Box<dyn std::error::Error>> {
-    log::info!("Hotkey capture mode activated — click a window to capture");
-    Ok(())
-}
-
-/// Find the window at a given screen point
-#[cfg(target_os = "windows")]
-pub fn find_window_at_point(x: i32, y: i32) -> Option<isize> {
-    unsafe {
-        let point = POINT { x, y };
-        let hwnd = WindowFromPoint(point);
-        if hwnd.0 != std::ptr::null_mut() {
-            let root = GetAncestor(hwnd, GA_ROOT);
-            if root.0 != std::ptr::null_mut() {
-                return Some(root.0 as isize);
-            }
-            return Some(hwnd.0 as isize);
-        }
-    }
-    None
-}
-
 /// Get information about the window currently under the cursor
 #[cfg(target_os = "windows")]
 pub fn get_window_under_cursor() -> Option<(isize, String)> {
@@ -55,16 +30,6 @@ pub fn get_window_under_cursor() -> Option<(isize, String)> {
 }
 
 // Non-Windows stubs
-#[cfg(not(target_os = "windows"))]
-pub fn start_hotkey_capture() -> Result<(), Box<dyn std::error::Error>> {
-    Err("Hotkey capture is only supported on Windows".into())
-}
-
-#[cfg(not(target_os = "windows"))]
-pub fn find_window_at_point(_x: i32, _y: i32) -> Option<isize> {
-    None
-}
-
 #[cfg(not(target_os = "windows"))]
 pub fn get_window_under_cursor() -> Option<(isize, String)> {
     None

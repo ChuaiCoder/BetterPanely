@@ -15,9 +15,9 @@ pub async fn refresh_window_list() -> Result<Vec<WindowInfo>, String> {
     crate::window_embedder::enumerator::enumerate_windows().map_err(|e| e.to_string())
 }
 
-/// Embed a window into a panel
+/// Embed a window into a panel (sync — SetParent must run on main thread)
 #[command]
-pub async fn embed_window(
+pub fn embed_window(
     app_handle: AppHandle,
     state: State<'_, AppState>,
     panel_id: String,
@@ -52,9 +52,9 @@ pub async fn embed_window(
     Ok(())
 }
 
-/// Release an embedded window from its panel
+/// Release an embedded window from its panel (sync — SetParent must run on main thread)
 #[command]
-pub async fn release_window(
+pub fn release_window(
     app_handle: AppHandle,
     state: State<'_, AppState>,
     panel_id: String,
@@ -101,11 +101,11 @@ pub async fn start_drag_capture(
 
     #[cfg(target_os = "windows")]
     {
-        // Register all current container HWNDs
+        // Register all current container HWNDs with panel IDs
         let panel_mgr = state.panel_manager.lock().map_err(|e| e.to_string())?;
         for panel in panel_mgr.list() {
             if let Some(hwnd) = panel.container_hwnd {
-                drag.register_container(hwnd);
+                drag.register_container(hwnd, &panel.id);
             }
         }
         drop(panel_mgr);
@@ -114,10 +114,6 @@ pub async fn start_drag_capture(
             drag.clone(),
             app_handle.clone(),
         ).map_err(|e| e.to_string())?;
-
-        // Set thread-local state for the hook callback
-        crate::drag_capture::hook::set_thread_drag_state(Some(drag.clone()));
-        crate::drag_capture::hook::set_thread_app_handle(Some(app_handle.clone()));
     }
 
     log::info!("Drag capture mode started");
@@ -137,17 +133,18 @@ pub async fn stop_drag_capture(
     Ok(())
 }
 
-/// Hotkey-based window capture (Ctrl+Shift+W)
+/// Hotkey-based window capture (sync — Win32 APIs must run on main thread)
 #[command]
-pub async fn capture_window_via_hotkey(
-    _app_handle: AppHandle,
+pub fn capture_window_via_hotkey(
+    app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    capture_window_via_hotkey_internal(&state).map_err(|e| e.to_string())
+    capture_window_via_hotkey_internal(&app_handle, &state).map_err(|e| e.to_string())
 }
 
 /// Internal hotkey capture implementation
 pub fn capture_window_via_hotkey_internal(
+    app_handle: &AppHandle,
     state: &AppState,
 ) -> Result<(), String> {
     #[cfg(target_os = "windows")]
@@ -201,6 +198,8 @@ pub fn capture_window_via_hotkey_internal(
                     p.panel_type = PanelType::Embedded {
                         embed_info: Some(embed_info),
                     };
+                    // Emit panel:created event so frontend updates
+                    let _ = app_handle.emit("panel:created", &p.clone());
                 }
             }
         }

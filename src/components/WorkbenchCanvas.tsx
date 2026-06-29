@@ -1,0 +1,384 @@
+import { createSignal, createEffect, For, Show, onMount, onCleanup } from "solid-js";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { ThumbPanel } from "./ThumbPanel";
+import { ToolPanel } from "./ToolPanel";
+import { AddPanelDialog } from "./AddPanelDialog";
+import { useI18n } from "../lib/i18n";
+import { snap } from "../lib/snap-engine";
+import {
+  addThumbnail,
+  captureWindowUnderCursor,
+  removePanel,
+  updateThumbnailRect,
+  loadLayout,
+  saveLayout,
+  onSourceClosed,
+} from "../lib/workbench-api";
+import type { PanelState, SnapGuide, WindowInfo } from "../lib/types";
+
+const PANEL_HEADER_HEIGHT = 32;
+
+/**
+ * 工作台主画布组件
+ * 管理所有面板的布局、拖拽、磁性吸附、状态持久化等核心功能
+ */
+export function WorkbenchCanvas() {
+  const { t } = useI18n();
+  const [panels, setPanels] = createSignal<PanelState[]>([]);
+  const [draggingId, setDraggingId] = createSignal<string | null>(null);
+  const [dragOffset, setDragOffset] = createSignal({ x: 0, y: 0 });
+  const [snapGuides, setSnapGuides] = createSignal<SnapGuide[]>([]);
+  const [isDialogOpen, setIsDialogOpen] = createSignal(false);
+  const [canvasSize, setCanvasSize] = createSignal({ width: 800, height: 600 });
+  const [layoutReady, setLayoutReady] = createSignal(false);
+
+  let canvasRef!: HTMLDivElement;
+  let saveTimer: number | undefined;
+
+  const getNextZIndex = () => {
+    const max = panels().reduce((acc, p) => Math.max(acc, p.zIndex), 0);
+    return max + 1;
+  };
+
+  const getThumbnailRect = (panel: PanelState) => {
+    const canvasRect = canvasRef?.getBoundingClientRect();
+    return {
+      x: panel.x + (canvasRect?.left ?? 0),
+      y: panel.y + (canvasRect?.top ?? 0) + PANEL_HEADER_HEIGHT,
+      width: panel.width,
+      height: Math.max(1, panel.height - PANEL_HEADER_HEIGHT),
+    };
+  };
+
+  const syncThumbnailRect = async (panel: PanelState) => {
+    if (panel.type !== "thumbnail" || !panel.sourceHwnd) return;
+    const rect = getThumbnailRect(panel);
+    await updateThumbnailRect(panel.id, rect.x, rect.y, rect.width, rect.height);
+  };
+
+  const syncAllThumbnailRects = () => {
+    panels().forEach((panel) => {
+      if (panel.type === "thumbnail") {
+        void syncThumbnailRect(panel).catch(console.error);
+      }
+    });
+  };
+
+  createEffect(() => {
+    const ready = layoutReady();
+    const snapshot = panels();
+    if (!ready) return;
+
+    if (saveTimer !== undefined) {
+      window.clearTimeout(saveTimer);
+    }
+    saveTimer = window.setTimeout(() => {
+      saveLayout(snapshot).catch(console.error);
+    }, 400);
+  });
+
+  const addThumbnailPanel = async (hwnd: number, title: string) => {
+    try {
+      const panelId = await addThumbnail(hwnd);
+      const newPanel: PanelState = {
+        id: panelId,
+        type: "thumbnail",
+        sourceHwnd: hwnd,
+        title,
+        x: 100 + panels().length * 20,
+        y: 100 + panels().length * 20,
+        width: 200,
+        height: 150,
+        zIndex: getNextZIndex(),
+        visible: true,
+      };
+      setPanels((prev) => [...prev, newPanel]);
+      await syncThumbnailRect(newPanel);
+    } catch (e) {
+      console.error("Failed to add thumbnail:", e);
+    }
+  };
+
+  const addToolPanel = (toolId: string) => {
+    const toolConfig: Record<string, { title: string; width: number; height: number }> = {
+      calculator: { title: t("tools.calculator") || "Calculator", width: 280, height: 420 },
+      notes: { title: t("tools.notes") || "Notes", width: 350, height: 400 },
+      timer: { title: t("tools.timer") || "Timer", width: 300, height: 200 },
+      weather: { title: t("tools.weather") || "Weather", width: 300, height: 350 },
+    };
+    const config = toolConfig[toolId] || { title: toolId, width: 300, height: 300 };
+
+    const newPanel: PanelState = {
+      id: `tool_${toolId}_${Date.now()}`,
+      type: "tool",
+      toolId,
+      title: config.title,
+      x: 100 + panels().length * 20,
+      y: 100 + panels().length * 20,
+      width: config.width,
+      height: config.height,
+      zIndex: getNextZIndex(),
+      visible: true,
+    };
+    setPanels((prev) => [...prev, newPanel]);
+  };
+
+  const handleAddThumbnails = (windows: WindowInfo[]) => {
+    windows.forEach((windowInfo) => {
+      void addThumbnailPanel(windowInfo.hwnd, windowInfo.title);
+    });
+  };
+
+  const handleClosePanel = async (panelId: string) => {
+    try {
+      await removePanel(panelId);
+      setPanels((prev) => prev.filter((p) => p.id !== panelId));
+    } catch (e) {
+      console.error("Failed to remove panel:", e);
+    }
+  };
+
+  const handleTop = (panelId: string) => {
+    setPanels((prev) =>
+      prev.map((p) => (p.id === panelId ? { ...p, zIndex: getNextZIndex() } : p))
+    );
+  };
+
+  const handleDragStart = (panelId: string, offsetX: number, offsetY: number) => {
+    setDraggingId(panelId);
+    setDragOffset({ x: offsetX, y: offsetY });
+    handleTop(panelId);
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    const activePanelId = draggingId();
+    if (!activePanelId) return;
+    const canvas = canvasRef;
+    if (!canvas) return;
+
+    const canvasRect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - canvasRect.left;
+    const mouseY = e.clientY - canvasRect.top;
+
+    const newX = mouseX - dragOffset().x;
+    const newY = mouseY - dragOffset().y;
+
+    setPanels((prev) => {
+      const otherPanels = prev.filter((p) => p.id !== activePanelId);
+      const draggedPanel = prev.find((p) => p.id === activePanelId);
+
+      if (!draggedPanel) return prev;
+
+      const draggedRect = { x: newX, y: newY, width: draggedPanel.width, height: draggedPanel.height };
+      const snapResult = snap(draggedRect, otherPanels, canvasSize().width, canvasSize().height);
+
+      setSnapGuides(snapResult.guides);
+
+      const movedPanel = { ...draggedPanel, x: snapResult.rect.x, y: snapResult.rect.y };
+      if (movedPanel.type === "thumbnail") {
+        void syncThumbnailRect(movedPanel).catch(console.error);
+      }
+
+      return prev.map((p) => (p.id === activePanelId ? movedPanel : p));
+    });
+  };
+
+  const handleMouseUp = async () => {
+    if (!draggingId()) return;
+
+    const panel = panels().find((p) => p.id === draggingId());
+    if (panel && panel.type === "thumbnail" && panel.sourceHwnd) {
+      try {
+        await syncThumbnailRect(panel);
+      } catch (e) {
+        console.error("Failed to update thumbnail rect:", e);
+      }
+    }
+
+    setDraggingId(null);
+    setSnapGuides([]);
+  };
+
+  const handleResize = () => {
+    const canvas = canvasRef;
+    if (canvas) {
+      setCanvasSize({ width: canvas.clientWidth, height: canvas.clientHeight });
+      window.requestAnimationFrame(syncAllThumbnailRects);
+    }
+  };
+
+  const restoreSavedPanels = async (savedPanels: PanelState[]) => {
+    const restored: PanelState[] = [];
+
+    for (const panel of savedPanels) {
+      if (panel.type === "tool") {
+        restored.push({ ...panel, visible: true });
+        continue;
+      }
+
+      if (!panel.sourceHwnd) continue;
+
+      try {
+        const panelId = await addThumbnail(panel.sourceHwnd);
+        const restoredPanel = { ...panel, id: panelId, visible: true };
+        restored.push(restoredPanel);
+        await syncThumbnailRect(restoredPanel);
+      } catch (e) {
+        console.warn("Skipped stale thumbnail panel:", panel.title, e);
+      }
+    }
+
+    return restored;
+  };
+
+  onMount(() => {
+    const cleanupFns: Array<() => void> = [];
+    let disposed = false;
+    const addCleanup = (fn: () => void) => {
+      if (disposed) {
+        fn();
+      } else {
+        cleanupFns.push(fn);
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+    handleResize();
+
+    (async () => {
+      try {
+        const saved = await loadLayout();
+        if (saved.length > 0) {
+          setPanels(await restoreSavedPanels(saved));
+        }
+      } catch (e) {
+        console.warn("Failed to load layout:", e);
+      } finally {
+        setLayoutReady(true);
+      }
+
+      try {
+        const unlistenClosed = await onSourceClosed((event) => {
+          setPanels((prev) => prev.filter((p) => p.sourceHwnd !== event.payload.sourceHwnd));
+        });
+        addCleanup(unlistenClosed);
+      } catch (e) {
+        console.warn("Failed to listen source-closed event:", e);
+      }
+
+      const unlistenNewPanel = await listen("tray:new-panel", () => {
+        setIsDialogOpen(true);
+      });
+      const unlistenLaunchTool = await listen<string>("tray:launch-tool", (event) => {
+        addToolPanel(event.payload);
+      });
+      const unlistenCaptureHotkey = await listen("tray:capture-hotkey", async () => {
+        try {
+          const windowInfo = await captureWindowUnderCursor();
+          if (windowInfo) {
+            await addThumbnailPanel(windowInfo.hwnd, windowInfo.title);
+          }
+        } catch (e) {
+          console.error("Failed to capture window under cursor:", e);
+        }
+      });
+
+      addCleanup(unlistenNewPanel);
+      addCleanup(unlistenLaunchTool);
+      addCleanup(unlistenCaptureHotkey);
+    })();
+
+    onCleanup(() => {
+      disposed = true;
+      window.removeEventListener("resize", handleResize);
+      cleanupFns.forEach((cleanup) => cleanup());
+      if (saveTimer !== undefined) {
+        window.clearTimeout(saveTimer);
+      }
+      if (layoutReady()) {
+        saveLayout(panels()).catch(console.error);
+      }
+    });
+  });
+
+  return (
+    <div class="workbench-container">
+      <header class="workbench-header">
+        <h1>{t("app.title")}</h1>
+        <div class="header-actions">
+          <button class="btn btn-secondary btn-small" onClick={() => invoke("open_settings")}>
+            ⚙
+          </button>
+          <button class="btn btn-primary" onClick={() => setIsDialogOpen(true)}>
+            {t("app.addPanel")}
+          </button>
+        </div>
+      </header>
+
+      <div
+        ref={canvasRef}
+        class="workbench-canvas"
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
+        <For each={panels()}>
+          {(panel) =>
+            panel.type === "thumbnail" ? (
+              <ThumbPanel
+                panel={panel}
+                isDragging={draggingId() === panel.id}
+                onDragStart={handleDragStart}
+                onClose={handleClosePanel}
+                onTop={handleTop}
+              />
+            ) : (
+              <ToolPanel
+                panel={panel}
+                isDragging={draggingId() === panel.id}
+                onDragStart={handleDragStart}
+                onClose={handleClosePanel}
+                onTop={handleTop}
+              />
+            )
+          }
+        </For>
+
+        <For each={snapGuides()}>
+          {(guide) => (
+            <div
+              class={`snap-guide ${guide.type}`}
+              style={{
+                left: guide.type === "vertical" ? `${guide.position}px` : "0px",
+                top: guide.type === "horizontal" ? `${guide.position}px` : "0px",
+                width: guide.type === "vertical" ? "1px" : "100%",
+                height: guide.type === "horizontal" ? "1px" : "100%",
+              }}
+            />
+          )}
+        </For>
+
+        <Show when={panels().length === 0}>
+          <div class="empty-canvas">
+            <p>{t("app.emptyWorkbench")}</p>
+            <button class="btn btn-primary" onClick={() => setIsDialogOpen(true)}>
+              {t("app.addPanel")}
+            </button>
+          </div>
+        </Show>
+      </div>
+
+      <footer class="workbench-footer">
+        <span>{t("app.panelCount", { count: panels().length })}</span>
+      </footer>
+
+      <AddPanelDialog
+        isOpen={isDialogOpen()}
+        onClose={() => setIsDialogOpen(false)}
+        onAddThumbnails={handleAddThumbnails}
+        onAddTool={addToolPanel}
+      />
+    </div>
+  );
+}

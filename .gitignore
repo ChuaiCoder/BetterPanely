@@ -35,3 +35,8 @@ src-tauri/target/release/bundle/
 # ─── Logs ────────────────────────────────────────
 *.log
 logs/
+
+# ─── Python test/cache output ─────────────────────
+__pycache__/
+*.py[cod]
+.pytest_cache/

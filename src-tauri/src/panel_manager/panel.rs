@@ -85,12 +85,11 @@ impl Panel {
         &mut self,
         app_handle: &AppHandle,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        match &self.panel_type {
-            PanelType::Embedded { embed_info: Some(info) } => {
-                // Restore embedded window before cleanup
-                crate::window_embedder::release_window(info.source_hwnd, info)?;
+        // Try to release embedded window, but continue cleanup even if it fails
+        if let PanelType::Embedded { embed_info: Some(ref info) } = self.panel_type {
+            if let Err(e) = crate::window_embedder::release_window(info.source_hwnd, info) {
+                log::warn!("Failed to release embedded window during cleanup: {}", e);
             }
-            _ => {}
         }
 
         // Close the WebView if there is one
@@ -118,7 +117,8 @@ impl Panel {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let label = format!("panel_{}", self.id);
 
-        let url_with_lang = format!("{}?lang={}", url, lang);
+        // Use hash for language so Tauri's asset resolver can find the file
+        let url_with_lang = format!("{}#lang={}", url, lang);
 
         let _webview = WebviewWindowBuilder::new(
             app_handle,
