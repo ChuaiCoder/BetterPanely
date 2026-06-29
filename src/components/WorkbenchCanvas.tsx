@@ -14,6 +14,7 @@ import {
   updateThumbnailRect,
   loadLayout,
   saveLayout,
+  openToolWindow,
 } from "../lib/workbench-api";
 import type { PanelState, SnapGuide, WindowInfo } from "../lib/types";
 
@@ -331,6 +332,13 @@ export function WorkbenchCanvas() {
       } catch (e) {
         console.error("Failed to focus source window:", e);
         showNotice(t("app.toast.focusFailed", { reason: errorMessage(e) }));
+      }
+    } else if (panel.type === "tool" && panel.toolId) {
+      try {
+        await openToolWindow(panel.toolId);
+      } catch (e) {
+        console.error("Failed to open tool window:", e);
+        showNotice(t("app.toast.openToolFailed", { reason: errorMessage(e) }));
       }
     } else {
       handleTop(panel.id);
@@ -668,6 +676,7 @@ export function WorkbenchCanvas() {
                 isSelected={selectedPanelId() === panel.id}
                 onDragStart={handleDragStart}
                 onSelect={handleSelectPanel}
+                onFocus={handleFocusPanel}
                 onClose={handleClosePanel}
                 onTop={handleTop}
               />

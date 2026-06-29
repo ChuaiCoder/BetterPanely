@@ -122,6 +122,7 @@ pub fn run() {
             commands::workbench_cmds::wb_remove_panel,
             commands::workbench_cmds::wb_focus_source,
             commands::workbench_cmds::wb_get_workbench_hwnd,
+            commands::workbench_cmds::wb_open_tool_window,
             commands::workbench_cmds::wb_save_layout,
             commands::workbench_cmds::wb_load_layout,
         ])

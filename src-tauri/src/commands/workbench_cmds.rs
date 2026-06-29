@@ -1,4 +1,5 @@
-use tauri::{State, AppHandle, Manager};
+use tauri::{State, AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use crate::AppState;
 use crate::thumbnail::SharedThumbnailManager;
 use crate::window_embedder::enumerator;
 use crate::state::SavedPanel;
@@ -49,6 +50,43 @@ fn get_workbench_hwnd(app: &AppHandle) -> Result<isize, String> {
         .ok_or_else(|| "Workbench window not found".to_string())?;
     let hwnd = window.hwnd().map_err(|e| e.to_string())?;
     Ok(hwnd.0 as isize)
+}
+
+struct ToolWindowConfig {
+    title_key: &'static str,
+    url: &'static str,
+    width: f64,
+    height: f64,
+}
+
+fn tool_window_config(tool_id: &str) -> Option<ToolWindowConfig> {
+    match tool_id {
+        "calculator" => Some(ToolWindowConfig {
+            title_key: "tool.calculator",
+            url: "src/tools/calculator/index.html",
+            width: 320.0,
+            height: 480.0,
+        }),
+        "notes" => Some(ToolWindowConfig {
+            title_key: "tool.notes",
+            url: "src/tools/notes/index.html",
+            width: 480.0,
+            height: 520.0,
+        }),
+        "timer" => Some(ToolWindowConfig {
+            title_key: "tool.timer",
+            url: "src/tools/timer/index.html",
+            width: 360.0,
+            height: 260.0,
+        }),
+        "weather" => Some(ToolWindowConfig {
+            title_key: "tool.weather",
+            url: "src/tools/weather/index.html",
+            width: 380.0,
+            height: 460.0,
+        }),
+        _ => None,
+    }
 }
 
 #[tauri::command]
@@ -166,6 +204,40 @@ pub fn wb_get_workbench_hwnd(app: AppHandle) -> Result<isize, String> {
 
     #[cfg(not(target_os = "windows"))]
     Err("Workbench HWND is only available on Windows".to_string())
+}
+
+#[tauri::command]
+pub fn wb_open_tool_window(
+    tool_id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let config = tool_window_config(&tool_id)
+        .ok_or_else(|| format!("Unknown tool: {}", tool_id))?;
+    let lang = state
+        .state_manager
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get_language();
+
+    let label = format!("tool_{}_window", tool_id);
+    if let Some(window) = app.get_webview_window(&label) {
+        let _ = window.show();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
+    let url = format!("{}#lang={}", config.url, lang);
+    WebviewWindowBuilder::new(&app, label, WebviewUrl::App(url.into()))
+        .title(crate::locales::t(config.title_key, &lang))
+        .inner_size(config.width, config.height)
+        .center()
+        .decorations(true)
+        .resizable(true)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 #[tauri::command]

@@ -94,6 +94,14 @@ export async function getWorkbenchHwnd(): Promise<number> {
 }
 
 /**
+ * Open a built-in tool as a standalone utility window.
+ * @param toolId Built-in tool ID
+ */
+export async function openToolWindow(toolId: string): Promise<void> {
+  return invoke("wb_open_tool_window", { toolId });
+}
+
+/**
  * 保存当前布局
  * @param panels 面板状态列表
  */

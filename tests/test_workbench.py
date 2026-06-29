@@ -35,6 +35,7 @@ class TestWorkbenchRuntimeShape:
 
         assert "commands::workbench_cmds::wb_add_thumbnail" in lib_rs
         assert "commands::workbench_cmds::wb_update_thumbnail_rect" in lib_rs
+        assert "commands::workbench_cmds::wb_open_tool_window" in lib_rs
         assert "commands::settings_cmds::set_settings" in lib_rs
         assert "commands::settings_cmds::open_settings" in lib_rs
 
@@ -150,6 +151,45 @@ class TestWorkbenchRuntimeShape:
         assert ".panel-content-focusable" in app_css
         assert "cursor: move" in app_css
 
+    def test_tool_panel_focus_opens_standalone_tool_window(self, repo_root):
+        canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
+            encoding="utf-8"
+        )
+        tool_panel = (repo_root / "src/components/ToolPanel.tsx").read_text(
+            encoding="utf-8"
+        )
+        workbench_api = (repo_root / "src/lib/workbench-api.ts").read_text(
+            encoding="utf-8"
+        )
+        workbench_cmds = (
+            repo_root / "src-tauri/src/commands/workbench_cmds.rs"
+        ).read_text(encoding="utf-8")
+        en_locale = (repo_root / "src/lib/locales/en.json").read_text(
+            encoding="utf-8"
+        )
+        zh_locale = (repo_root / "src/lib/locales/zh.json").read_text(
+            encoding="utf-8"
+        )
+
+        assert "wb_open_tool_window" in workbench_cmds
+        assert "tool_window_config" in workbench_cmds
+        assert "WebviewWindowBuilder::new" in workbench_cmds
+        assert "tool_{}_window" in workbench_cmds
+        assert "openToolWindow(toolId: string)" in workbench_api
+        assert 'invoke("wb_open_tool_window"' in workbench_api
+        assert "openToolWindow(panel.toolId)" in canvas_tsx
+        assert "app.toast.openToolFailed" in canvas_tsx
+        assert "onFocus={handleFocusPanel}" in canvas_tsx
+        assert "onFocus: (id: string) => void" in tool_panel
+        assert 'closest(".panel-focus")' in tool_panel
+        assert "props.onFocus(props.panel.id)" in tool_panel
+        assert 'class="panel-btn panel-focus"' in tool_panel
+        assert 't("app.openToolWindow")' in tool_panel
+        assert "app.openToolWindow" in en_locale
+        assert "app.openToolWindow" in zh_locale
+        assert "app.toast.openToolFailed" in en_locale
+        assert "app.toast.openToolFailed" in zh_locale
+
     def test_workbench_keyboard_shortcuts_use_selected_panel(self, repo_root):
         canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
             encoding="utf-8"
@@ -177,8 +217,10 @@ class TestWorkbenchRuntimeShape:
         assert "app.toast.layoutSaved" in canvas_tsx
         assert "isSelected={selectedPanelId() === panel.id}" in canvas_tsx
         assert "onSelect={handleSelectPanel}" in canvas_tsx
+        assert "openToolWindow(panel.toolId)" in canvas_tsx
         assert "isSelected: boolean" in thumb_panel
         assert "isSelected: boolean" in tool_panel
+        assert "onFocus: (id: string) => void" in tool_panel
         assert "props.onSelect(props.panel.id)" in thumb_panel
         assert "props.onSelect(props.panel.id)" in tool_panel
         assert "panel-selected" in thumb_panel
@@ -215,6 +257,7 @@ class TestWorkbenchRuntimeShape:
         assert "app.toast.focusFailed" in canvas_tsx
         assert "app.toast.layoutSaved" in canvas_tsx
         assert "app.toast.loadLayoutFailed" in canvas_tsx
+        assert "app.toast.openToolFailed" in canvas_tsx
         assert "app.toast.removePanelFailed" in canvas_tsx
         assert "app.toast.sourceClosed" in canvas_tsx
         assert "app.toast.stalePanelSkipped" in canvas_tsx
@@ -231,6 +274,8 @@ class TestWorkbenchRuntimeShape:
         assert "app.toast.addThumbnailFailed" in zh_locale
         assert "app.toast.enumerateWindowsFailed" in en_locale
         assert "app.toast.enumerateWindowsFailed" in zh_locale
+        assert "app.toast.openToolFailed" in en_locale
+        assert "app.toast.openToolFailed" in zh_locale
 
     def test_blank_canvas_context_menu_offers_core_actions(self, repo_root):
         canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
@@ -322,6 +367,7 @@ class TestWorkbenchPersistenceShape:
         assert "../lib/workbench-api" in canvas_tsx
         assert "saveLayout" in canvas_tsx
         assert "captureWindowUnderCursor" in canvas_tsx
+        assert "openToolWindow" in canvas_tsx
 
     def test_settings_window_has_capability_and_camel_case_contract(self, repo_root):
         capabilities = (
@@ -343,6 +389,7 @@ class TestWorkbenchPersistenceShape:
         )
 
         assert '"settings_window"' in capabilities
+        assert '"tool_*_window"' in capabilities
         assert '"panel_*"' not in capabilities
         assert 'rename_all = "camelCase"' in state_rs
         assert 'alias = "launch_on_startup"' in state_rs

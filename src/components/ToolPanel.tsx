@@ -8,6 +8,7 @@ interface ToolPanelProps {
   isSelected: boolean;
   onDragStart: (id: string, offsetX: number, offsetY: number) => void;
   onSelect: (id: string) => void;
+  onFocus: (id: string) => void;
   onClose: (id: string) => void;
   onTop: (id: string) => void;
 }
@@ -34,6 +35,7 @@ export function ToolPanel(props: ToolPanelProps) {
   const handleMouseDown = (e: MouseEvent) => {
     if (
       (e.target as HTMLElement).closest(".panel-close") ||
+      (e.target as HTMLElement).closest(".panel-focus") ||
       (e.target as HTMLElement).closest(".panel-top")
     ) {
       return;
@@ -51,6 +53,11 @@ export function ToolPanel(props: ToolPanelProps) {
 
   const handleTop = () => {
     props.onTop(props.panel.id);
+  };
+
+  const handleFocus = () => {
+    props.onSelect(props.panel.id);
+    props.onFocus(props.panel.id);
   };
 
   return (
@@ -75,6 +82,13 @@ export function ToolPanel(props: ToolPanelProps) {
             title={t("app.close")}
           >
             ✕
+          </button>
+          <button
+            class="panel-btn panel-focus"
+            onClick={(e) => { e.stopPropagation(); handleFocus(); }}
+            title={t("app.openToolWindow")}
+          >
+            ▣
           </button>
           <button
             class="panel-btn panel-top"
