@@ -89,6 +89,31 @@ class TestWorkbenchRuntimeShape:
         assert "thumb:source-closed" not in canvas_tsx
         assert "thumb:source-closed" not in workbench_api
 
+    def test_add_panel_dialog_blocks_incompatible_windows(self, repo_root):
+        dialog_tsx = (repo_root / "src/components/AddPanelDialog.tsx").read_text(
+            encoding="utf-8"
+        )
+        app_css = (repo_root / "src/App.css").read_text(encoding="utf-8")
+        en_locale = (repo_root / "src/lib/locales/en.json").read_text(
+            encoding="utf-8"
+        )
+        zh_locale = (repo_root / "src/lib/locales/zh.json").read_text(
+            encoding="utf-8"
+        )
+
+        assert "windowInfo.incompatibilityReason" in dialog_tsx
+        assert 't("app.windowNotCapturable")' in dialog_tsx
+        assert "if (!windowInfo.isCompatible) return" in dialog_tsx
+        assert "selectedHwnds().has(w.hwnd) && w.isCompatible" in dialog_tsx
+        assert "checked={w.isCompatible && selectedHwnds().has(w.hwnd)}" in dialog_tsx
+        assert "disabled={!w.isCompatible}" in dialog_tsx
+        assert "window-item-disabled" in dialog_tsx
+        assert "window-incompatible-reason" in dialog_tsx
+        assert "window-item-disabled" in app_css
+        assert "window-incompatible-reason" in app_css
+        assert "app.windowNotCapturable" in en_locale
+        assert "app.windowNotCapturable" in zh_locale
+
 
 class TestWorkbenchPersistenceShape:
     """Verify persistence belongs to the workbench layout, not legacy panels."""

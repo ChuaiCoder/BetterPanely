@@ -23,6 +23,7 @@
   "app.searchWindows": "Search windows by title, exe name...",
   "app.cancel": "Cancel",
   "app.addSelected": "Add Selected",
+  "app.windowNotCapturable": "This window cannot be captured",
   "app.language": "Language",
   "app.langToggle": "EN / 中文",
 

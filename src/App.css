@@ -261,8 +261,32 @@ body {
   background: rgba(255, 255, 255, 0.1);
 }
 
-.window-title {
+.window-item-disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.window-item-disabled:hover {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.window-item input {
+  flex: 0 0 auto;
+}
+
+.window-item-disabled input {
+  cursor: not-allowed;
+}
+
+.window-main {
+  display: flex;
   flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.window-title {
   color: #fff;
   font-size: 13px;
   overflow: hidden;
@@ -271,8 +295,20 @@ body {
 }
 
 .window-exe {
+  max-width: 120px;
   color: rgba(255, 255, 255, 0.5);
   font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.window-incompatible-reason {
+  color: #fca5a5;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tool-grid {

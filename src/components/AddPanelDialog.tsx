@@ -43,8 +43,14 @@ export function AddPanelDialog(props: AddPanelDialogProps) {
     );
   };
 
-  const toggleWindow = (hwnd: number) => {
+  const getIncompatibilityReason = (windowInfo: WindowInfo) =>
+    windowInfo.incompatibilityReason || t("app.windowNotCapturable");
+
+  const toggleWindow = (windowInfo: WindowInfo) => {
+    if (!windowInfo.isCompatible) return;
+
     const newSet = new Set(selectedHwnds());
+    const hwnd = windowInfo.hwnd;
     if (newSet.has(hwnd)) {
       newSet.delete(hwnd);
     } else {
@@ -54,7 +60,9 @@ export function AddPanelDialog(props: AddPanelDialogProps) {
   };
 
   const handleAddWindows = () => {
-    const selected = windows().filter((w) => selectedHwnds().has(w.hwnd));
+    const selected = windows().filter((w) => selectedHwnds().has(w.hwnd) && w.isCompatible);
+    if (selected.length === 0) return;
+
     props.onAddThumbnails(selected);
     props.onClose();
   };
@@ -82,13 +90,24 @@ export function AddPanelDialog(props: AddPanelDialogProps) {
             <div class="window-list">
               <For each={filteredWindows()}>
                 {(w) => (
-                  <label class="window-item">
+                  <label
+                    class={`window-item${w.isCompatible ? "" : " window-item-disabled"}`}
+                    title={w.isCompatible ? undefined : getIncompatibilityReason(w)}
+                  >
                     <input
                       type="checkbox"
-                      checked={selectedHwnds().has(w.hwnd)}
-                      onChange={() => toggleWindow(w.hwnd)}
+                      checked={w.isCompatible && selectedHwnds().has(w.hwnd)}
+                      disabled={!w.isCompatible}
+                      onChange={() => toggleWindow(w)}
                     />
-                    <span class="window-title">{w.title}</span>
+                    <span class="window-main">
+                      <span class="window-title">{w.title}</span>
+                      <Show when={!w.isCompatible}>
+                        <span class="window-incompatible-reason">
+                          {getIncompatibilityReason(w)}
+                        </span>
+                      </Show>
+                    </span>
                     <span class="window-exe">{w.exePath.split("\\").pop()}</span>
                   </label>
                 )}

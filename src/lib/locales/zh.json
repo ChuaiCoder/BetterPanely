@@ -23,6 +23,7 @@
   "app.searchWindows": "按标题、程序名搜索窗口...",
   "app.cancel": "取消",
   "app.addSelected": "添加选中",
+  "app.windowNotCapturable": "此窗口无法捕获",
   "app.language": "语言",
   "app.langToggle": "中文 / EN",
 
