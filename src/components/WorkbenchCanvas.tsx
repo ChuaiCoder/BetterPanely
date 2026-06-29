@@ -19,6 +19,7 @@ import type { PanelState, SnapGuide, WindowInfo } from "../lib/types";
 
 const PANEL_HEADER_HEIGHT = 32;
 const NOTICE_TIMEOUT_MS = 5000;
+const THUMBNAIL_HEALTH_INTERVAL_MS = 30000;
 
 interface WorkbenchNotice {
   id: number;
@@ -29,6 +30,11 @@ interface WorkbenchNotice {
 interface CanvasContextMenu {
   x: number;
   y: number;
+}
+
+interface SourceClosedPayload {
+  panelId: string;
+  sourceHwnd: number;
 }
 
 /**
@@ -80,6 +86,19 @@ export function WorkbenchCanvas() {
     };
   };
 
+  const removeClosedSourcePanel = (panelId: string, sourceHwnd: number) => {
+    const panel = panels().find(
+      (p) => p.id === panelId || (p.type === "thumbnail" && p.sourceHwnd === sourceHwnd)
+    );
+    if (!panel) return;
+
+    if (selectedPanelId() === panel.id) {
+      setSelectedPanelId(null);
+    }
+    setPanels((prev) => prev.filter((p) => p.id !== panel.id));
+    showNotice(t("app.toast.sourceClosed", { title: panel.title }), "info");
+  };
+
   const syncThumbnailRect = async (panel: PanelState) => {
     if (panel.type !== "thumbnail" || !panel.sourceHwnd) return true;
     const rect = getThumbnailRect(panel);
@@ -92,11 +111,7 @@ export function WorkbenchCanvas() {
         message.includes("source window is no longer available") ||
         message.includes("thumbnail not found")
       ) {
-        if (selectedPanelId() === panel.id) {
-          setSelectedPanelId(null);
-        }
-        setPanels((prev) => prev.filter((p) => p.id !== panel.id));
-        showNotice(t("app.toast.sourceClosed", { title: panel.title }), "info");
+        removeClosedSourcePanel(panel.id, panel.sourceHwnd);
         return false;
       }
       throw e;
@@ -459,13 +474,23 @@ export function WorkbenchCanvas() {
           showNotice(t("app.toast.captureFailed", { reason: errorMessage(e) }));
         }
       });
+      const unlistenSourceClosed = await listen<SourceClosedPayload>(
+        "thumb:source-closed",
+        (event) => {
+          removeClosedSourcePanel(event.payload.panelId, event.payload.sourceHwnd);
+        }
+      );
 
       addCleanup(unlistenNewPanel);
       addCleanup(unlistenLaunchTool);
       addCleanup(unlistenCaptureHotkey);
+      addCleanup(unlistenSourceClosed);
     })();
 
-    const thumbnailHealthTimer = window.setInterval(syncAllThumbnailRects, 3000);
+    const thumbnailHealthTimer = window.setInterval(
+      syncAllThumbnailRects,
+      THUMBNAIL_HEALTH_INTERVAL_MS
+    );
 
     onCleanup(() => {
       disposed = true;

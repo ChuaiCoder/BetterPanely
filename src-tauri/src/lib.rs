@@ -46,6 +46,14 @@ pub fn run() {
             let capture_hotkey = current_settings.capture_hotkey.clone();
             drop(state_mgr);
 
+            #[cfg(target_os = "windows")]
+            {
+                let thumbnails = app.state::<SharedThumbnailManager>();
+                if let Err(e) = thumbnails.install_source_lifecycle_hook(app.handle().clone()) {
+                    log::warn!("Failed to install source window lifecycle hook: {}", e);
+                }
+            }
+
             // Initialize system tray with loaded language
             tray::create_tray(app.handle(), &current_lang)?;
 

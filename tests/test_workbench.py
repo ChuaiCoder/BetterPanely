@@ -82,13 +82,21 @@ class TestWorkbenchRuntimeShape:
         workbench_api = (repo_root / "src/lib/workbench-api.ts").read_text(
             encoding="utf-8"
         )
+        lib_rs = (repo_root / "src-tauri/src/lib.rs").read_text(encoding="utf-8")
 
         assert "source_hwnd" in manager_rs
         assert "IsWindow" in manager_rs
         assert "Thumbnail source window is no longer available" in manager_rs
-        assert "window.setInterval(syncAllThumbnailRects, 3000)" in canvas_tsx
+        assert "SetWinEventHook" in manager_rs
+        assert "EVENT_OBJECT_DESTROY_ID" in manager_rs
+        assert "WINEVENT_SKIPOWNPROCESS" in manager_rs
+        assert "SourceClosedPayload" in manager_rs
+        assert '"thumb:source-closed"' in manager_rs
+        assert "install_source_lifecycle_hook" in lib_rs
+        assert "listen<SourceClosedPayload>" in canvas_tsx
+        assert "removeClosedSourcePanel" in canvas_tsx
+        assert "THUMBNAIL_HEALTH_INTERVAL_MS = 30000" in canvas_tsx
         assert "source window is no longer available" in canvas_tsx
-        assert "thumb:source-closed" not in canvas_tsx
         assert "thumb:source-closed" not in workbench_api
 
     def test_add_panel_dialog_blocks_incompatible_windows(self, repo_root):
