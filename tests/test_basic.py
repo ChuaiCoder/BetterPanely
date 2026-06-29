@@ -2,12 +2,9 @@
 Basic launch & smoke tests for BetterPanely.
 """
 import time
-import pytest
 from helpers.win32_helper import (
     find_betterpanely_windows,
-    find_window_by_title,
     find_window_by_class,
-    wait_for_window,
     is_window_visible,
 )
 
@@ -43,45 +40,24 @@ class TestTrayIcon:
     """Verify system tray functionality."""
 
     def test_app_has_windows(self, main_window):
-        """App should have multiple windows (main + possibly tray helper)."""
+        """App should expose at least the main workbench window."""
         bp_wins = find_betterpanely_windows()
         assert len(bp_wins) >= 1, "Expected at least the main window"
 
 
-class TestToolLaunch:
-    """Verify built-in tools can be launched."""
+class TestWorkbenchMode:
+    """Verify the app is running in workbench mode, not legacy container mode."""
 
-    def test_calculator_launches(self, main_window, clean_state):
-        """Calculator tool window should appear."""
-        # Note: tools are launched via the Tauri invoke system.
-        # In a full E2E test, we'd click the button in the WebView.
-        # For now, verify the main window is responsive.
+    def test_workbench_stays_responsive(self, main_window, clean_state):
+        """Workbench should remain alive without spawning utility windows."""
         assert is_window_visible(main_window["hwnd"])
 
-    def test_multiple_tools_dont_crash(self, main_window, clean_state):
-        """Launching multiple tools should not crash the app."""
-        # Smoke test: just verify the main window stays alive
+    def test_workbench_does_not_create_legacy_containers(self, main_window):
+        """The DWM workbench should not use old BetterPanelyContainer windows."""
+        containers = find_window_by_class("BetterPanelyContainer")
+        assert containers == []
+
+    def test_idle_workbench_does_not_crash(self, main_window, clean_state):
+        """Idle workbench should stay visible across a short smoke interval."""
         time.sleep(1)
         assert is_window_visible(main_window["hwnd"])
-
-
-class TestPanelCreation:
-    """Verify panel (container window) creation."""
-
-    def test_container_windows_can_be_created(self, main_window):
-        """Container windows have the correct class name."""
-        # Container windows use "BetterPanelyContainer" class
-        containers = find_window_by_class("BetterPanelyContainer")
-        # Containers might or might not exist depending on test state
-        for c in containers:
-            assert "BetterPanelyContainer" in c["class_name"]
-
-    def test_container_window_has_title_bar(self, main_window):
-        """Container windows should have proper dimensions."""
-        containers = find_window_by_class("BetterPanelyContainer")
-        for c in containers:
-            left, top, right, bottom = c["rect"]
-            width = right - left
-            height = bottom - top
-            assert width > 50, f"Container too narrow: {width}"
-            assert height > 50, f"Container too short: {height}"

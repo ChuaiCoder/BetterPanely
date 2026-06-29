@@ -4,9 +4,6 @@ Uses ctypes (stdlib) — no external dependencies.
 """
 import ctypes
 from ctypes import wintypes
-import time
-import subprocess
-import os
 from pathlib import Path
 
 # ─── Win32 API bindings ─────────────────────────────────
@@ -124,15 +121,11 @@ def bring_window_to_front(hwnd):
 
 
 def find_betterpanely_windows() -> list[dict]:
-    """Find all BetterPanely-related windows (main, panels, tray)."""
+    """Find BetterPanely top-level windows used by the workbench app."""
     all_wins = enum_windows()
     bp_wins = []
     for w in all_wins:
-        if "BetterPanely" in w["title"] or "BetterPanelyContainer" in w["class_name"]:
-            bp_wins.append(w)
-        elif "Calculator" in w["title"] and w["class_name"] != "ApplicationFrameWindow":
-            bp_wins.append(w)
-        elif "Notes" in w["title"] or "Timer" in w["title"] or "Weather" in w["title"]:
+        if "BetterPanely" in w["title"]:
             bp_wins.append(w)
         elif "Settings" in w["title"]:
             bp_wins.append(w)

@@ -2,12 +2,8 @@
 Language switching tests for BetterPanely.
 Verifies Chinese/English switching works correctly.
 """
-import time
-import pytest
 from helpers.win32_helper import (
-    find_window_by_title,
-    wait_for_window,
-    is_window_visible,
+    find_betterpanely_windows,
 )
 
 
@@ -24,13 +20,10 @@ class TestLanguageSwitch:
         # In a full test we'd click the settings button
         pass
 
-    def test_calculator_shows_correct_language(self, main_window, clean_state):
-        """Calculator tool should show localized title."""
-        # Check for any calculator windows
-        calc_wins = find_window_by_title("Calculator") + find_window_by_title("计算器")
-        # May or may not exist depending on test state
-        for cw in calc_wins:
-            assert is_window_visible(cw["hwnd"])
+    def test_workbench_window_remains_single_localized_host(self, main_window, clean_state):
+        """Built-in tools are hosted inside the workbench, not separate panel windows."""
+        bp_wins = find_betterpanely_windows()
+        assert any("BetterPanely" in w["title"] for w in bp_wins)
 
 
 class TestSettingsPersistence:

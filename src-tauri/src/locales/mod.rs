@@ -32,7 +32,7 @@ fn en(key: &str) -> &str {
         "tool.weather" => "Weather",
         "tool.weather.desc" => "Current weather information",
 
-        "incompatibility.uwp" => "UWP apps cannot be embedded",
+        "incompatibility.uwp" => "UWP apps cannot be captured",
         "incompatibility.shell" => "System shell window",
         "incompatibility.self" => "BetterPanely window",
         "incompatibility.child" => "Already a child window",
@@ -68,7 +68,7 @@ fn zh(key: &str) -> &str {
         "tool.weather" => "天气",
         "tool.weather.desc" => "当前天气信息",
 
-        "incompatibility.uwp" => "UWP 应用无法嵌入",
+        "incompatibility.uwp" => "UWP 应用无法捕获",
         "incompatibility.shell" => "系统外壳窗口",
         "incompatibility.self" => "BetterPanely 自身窗口",
         "incompatibility.child" => "已是子窗口",

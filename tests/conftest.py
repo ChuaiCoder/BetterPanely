@@ -5,8 +5,6 @@ Launches the app, waits for it to be ready, and cleans up after.
 import pytest
 import subprocess
 import time
-import signal
-import os
 from pathlib import Path
 from helpers.win32_helper import (
     get_exe_path,
@@ -15,6 +13,12 @@ from helpers.win32_helper import (
     close_window,
     find_window_by_title,
 )
+
+
+@pytest.fixture(scope="session")
+def repo_root() -> Path:
+    """Return the project root for source-level architecture checks."""
+    return Path(__file__).parent.parent
 
 
 @pytest.fixture(scope="session")
@@ -65,17 +69,16 @@ def main_window(app_process):
 
 @pytest.fixture(scope="function")
 def clean_state(main_window):
-    """Ensure a clean state: close any leftover panels from previous tests."""
+    """Ensure a clean state: close leftover utility windows but keep the workbench."""
     bp_wins = find_betterpanely_windows()
     for w in bp_wins:
-        # Close container panels but keep main window
-        if "BetterPanelyContainer" in w["class_name"]:
+        if "Settings" in w["title"]:
             close_window(w["hwnd"])
     time.sleep(0.5)
     yield
     # Post-test cleanup
     bp_wins = find_betterpanely_windows()
     for w in bp_wins:
-        if "BetterPanelyContainer" in w["class_name"]:
+        if "Settings" in w["title"]:
             close_window(w["hwnd"])
     time.sleep(0.3)

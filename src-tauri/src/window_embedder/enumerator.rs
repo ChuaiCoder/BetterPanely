@@ -115,7 +115,7 @@ unsafe extern "system" fn enumerate_callback(hwnd: HWND, lparam: LPARAM) -> BOOL
     BOOL::from(true)
 }
 
-/// Check if a window can be embedded
+/// Check if a window can be captured as a workbench thumbnail.
 unsafe fn check_compatibility(
     hwnd: HWND,
     exe_path: &str,
@@ -125,7 +125,7 @@ unsafe fn check_compatibility(
 
     // UWP apps use ApplicationFrameHost.exe as a proxy
     if exe_lower.contains("applicationframehost") {
-        return (false, Some("UWP apps cannot be embedded".into()));
+        return (false, Some("UWP apps cannot be captured".into()));
     }
 
     // System shell windows
