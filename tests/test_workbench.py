@@ -70,6 +70,25 @@ class TestWorkbenchRuntimeShape:
         assert "get_webview_window(\"main\")" in workbench_cmds
         assert "thumbnail_manager.register(dest_hwnd, source_hwnd" in workbench_cmds
 
+    def test_thumbnail_source_lifetime_is_checked(self, repo_root):
+        manager_rs = (repo_root / "src-tauri/src/thumbnail/manager.rs").read_text(
+            encoding="utf-8"
+        )
+        canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
+            encoding="utf-8"
+        )
+        workbench_api = (repo_root / "src/lib/workbench-api.ts").read_text(
+            encoding="utf-8"
+        )
+
+        assert "source_hwnd" in manager_rs
+        assert "IsWindow" in manager_rs
+        assert "Thumbnail source window is no longer available" in manager_rs
+        assert "window.setInterval(syncAllThumbnailRects, 3000)" in canvas_tsx
+        assert "source window is no longer available" in canvas_tsx
+        assert "thumb:source-closed" not in canvas_tsx
+        assert "thumb:source-closed" not in workbench_api
+
 
 class TestWorkbenchPersistenceShape:
     """Verify persistence belongs to the workbench layout, not legacy panels."""

@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use super::dwm::*;
 use windows::Win32::Foundation::RECT;
 use windows::Win32::Graphics::Dwm::DWM_THUMBNAIL_PROPERTIES;
+use windows::Win32::UI::WindowsAndMessaging::IsWindow;
 
 pub struct ThumbnailManager {
     thumbnails: HashMap<String, ThumbnailHandle>,
@@ -10,6 +11,7 @@ pub struct ThumbnailManager {
 }
 
 pub struct ThumbnailHandle {
+    source_hwnd: isize,
     thumbnail_id: DwmThumbnailId,
     dest_rect: RECT,
     visible: bool,
@@ -36,6 +38,13 @@ impl ThumbnailManager {
         source_hwnd: isize,
         panel_id: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        if !IsWindow(windows::Win32::Foundation::HWND(dest_hwnd as *mut _)).as_bool() {
+            return Err("Workbench window is no longer available".into());
+        }
+        if !IsWindow(windows::Win32::Foundation::HWND(source_hwnd as *mut _)).as_bool() {
+            return Err("Thumbnail source window is no longer available".into());
+        }
+
         if let Some(old_handle) = self.thumbnails.remove(panel_id) {
             let _ = unregister_thumbnail(old_handle.thumbnail_id);
         }
@@ -46,6 +55,7 @@ impl ThumbnailManager {
         )?;
 
         let handle = ThumbnailHandle {
+            source_hwnd,
             thumbnail_id,
             dest_rect: RECT { left: 0, top: 0, right: 100, bottom: 100 },
             visible: true,
@@ -68,6 +78,18 @@ impl ThumbnailManager {
     ) -> Result<(), Box<dyn std::error::Error>> {
         if width <= 0 || height <= 0 {
             return Err("Thumbnail destination must have positive dimensions".into());
+        }
+
+        let source_hwnd = self
+            .thumbnails
+            .get(panel_id)
+            .ok_or("Thumbnail not found")?
+            .source_hwnd;
+        if !IsWindow(windows::Win32::Foundation::HWND(source_hwnd as *mut _)).as_bool() {
+            if let Some(handle) = self.thumbnails.remove(panel_id) {
+                let _ = unregister_thumbnail(handle.thumbnail_id);
+            }
+            return Err("Thumbnail source window is no longer available".into());
         }
 
         let handle = self.thumbnails.get_mut(panel_id).ok_or("Thumbnail not found")?;

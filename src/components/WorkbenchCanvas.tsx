@@ -13,7 +13,6 @@ import {
   updateThumbnailRect,
   loadLayout,
   saveLayout,
-  onSourceClosed,
 } from "../lib/workbench-api";
 import type { PanelState, SnapGuide, WindowInfo } from "../lib/types";
 
@@ -52,9 +51,22 @@ export function WorkbenchCanvas() {
   };
 
   const syncThumbnailRect = async (panel: PanelState) => {
-    if (panel.type !== "thumbnail" || !panel.sourceHwnd) return;
+    if (panel.type !== "thumbnail" || !panel.sourceHwnd) return true;
     const rect = getThumbnailRect(panel);
-    await updateThumbnailRect(panel.id, rect.x, rect.y, rect.width, rect.height);
+    try {
+      await updateThumbnailRect(panel.id, rect.x, rect.y, rect.width, rect.height);
+      return true;
+    } catch (e) {
+      const message = String(e).toLowerCase();
+      if (
+        message.includes("source window is no longer available") ||
+        message.includes("thumbnail not found")
+      ) {
+        setPanels((prev) => prev.filter((p) => p.id !== panel.id));
+        return false;
+      }
+      throw e;
+    }
   };
 
   const syncAllThumbnailRects = () => {
@@ -258,15 +270,6 @@ export function WorkbenchCanvas() {
         setLayoutReady(true);
       }
 
-      try {
-        const unlistenClosed = await onSourceClosed((event) => {
-          setPanels((prev) => prev.filter((p) => p.sourceHwnd !== event.payload.sourceHwnd));
-        });
-        addCleanup(unlistenClosed);
-      } catch (e) {
-        console.warn("Failed to listen source-closed event:", e);
-      }
-
       const unlistenNewPanel = await listen("tray:new-panel", () => {
         setIsDialogOpen(true);
       });
@@ -289,9 +292,12 @@ export function WorkbenchCanvas() {
       addCleanup(unlistenCaptureHotkey);
     })();
 
+    const thumbnailHealthTimer = window.setInterval(syncAllThumbnailRects, 3000);
+
     onCleanup(() => {
       disposed = true;
       window.removeEventListener("resize", handleResize);
+      window.clearInterval(thumbnailHealthTimer);
       cleanupFns.forEach((cleanup) => cleanup());
       if (saveTimer !== undefined) {
         window.clearTimeout(saveTimer);

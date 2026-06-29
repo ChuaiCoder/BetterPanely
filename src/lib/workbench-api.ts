@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type EventCallback } from "@tauri-apps/api/event";
 import type { PanelState, WindowInfo } from "./types";
 
 type WindowInfoRaw = {
@@ -145,26 +144,4 @@ export async function loadLayout(): Promise<PanelState[]> {
     zIndex: p.z_index,
     visible: true,
   }));
-}
-
-/**
- * 监听源窗口关闭事件
- * @param callback 回调函数
- * @returns 取消监听函数
- */
-export async function onSourceClosed(
-  callback: EventCallback<{ sourceHwnd: number }>
-): Promise<() => void> {
-  return listen("thumb:source-closed", callback);
-}
-
-/**
- * 监听拖拽进入工作台事件
- * @param callback 回调函数
- * @returns 取消监听函数
- */
-export async function onDragEnteredWorkbench(
-  callback: EventCallback<{ sourceHwnd: number; x: number; y: number }>
-): Promise<() => void> {
-  return listen("drag:entered-workbench", callback);
 }
