@@ -96,3 +96,22 @@ class TestWorkbenchPersistenceShape:
         assert "../lib/workbench-api" in canvas_tsx
         assert "saveLayout" in canvas_tsx
         assert "captureWindowUnderCursor" in canvas_tsx
+
+    def test_settings_window_has_capability_and_camel_case_contract(self, repo_root):
+        capabilities = (
+            repo_root / "src-tauri/capabilities/default.json"
+        ).read_text(encoding="utf-8")
+        state_rs = (repo_root / "src-tauri/src/state.rs").read_text(encoding="utf-8")
+        settings_html = (repo_root / "src/tools/settings/index.html").read_text(
+            encoding="utf-8"
+        )
+
+        assert '"settings_window"' in capabilities
+        assert '"panel_*"' not in capabilities
+        assert 'rename_all = "camelCase"' in state_rs
+        assert 'alias = "launch_on_startup"' in state_rs
+        assert 'alias = "minimize_to_tray"' in state_rs
+        assert 'alias = "capture_hotkey"' in state_rs
+        assert "s.launchOnStartup" in settings_html
+        assert "s.minimizeToTray" in settings_html
+        assert "s.captureHotkey" in settings_html

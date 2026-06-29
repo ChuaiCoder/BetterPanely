@@ -28,10 +28,14 @@ pub struct SavedPanel {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct AppSettings {
+    #[serde(alias = "launch_on_startup")]
     pub launch_on_startup: bool,
+    #[serde(alias = "minimize_to_tray")]
     pub minimize_to_tray: bool,
     pub theme: String,
+    #[serde(alias = "capture_hotkey")]
     pub capture_hotkey: String,
     pub language: String,
 }

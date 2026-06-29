@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capabilities for BetterPanely",
-  "windows": ["main", "panel_*"],
+  "windows": ["main", "settings_window"],
   "permissions": [
     "core:default",
     "core:window:default",
