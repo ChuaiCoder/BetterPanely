@@ -108,7 +108,7 @@ pub fn run() {
             commands::settings_cmds::set_language,
             commands::settings_cmds::open_settings,
             commands::workbench_cmds::wb_enumerate_windows,
-            commands::workbench_cmds::wb_capture_window_under_cursor,
+            commands::workbench_cmds::wb_capture_focused_window,
             commands::workbench_cmds::wb_add_thumbnail,
             commands::workbench_cmds::wb_update_thumbnail_rect,
             commands::workbench_cmds::wb_remove_panel,

@@ -35,10 +35,10 @@ export async function enumerateWindows(): Promise<WindowInfo[]> {
 }
 
 /**
- * 获取当前鼠标下可捕获的窗口。
+ * 获取当前焦点下可捕获的窗口。
  */
-export async function captureWindowUnderCursor(): Promise<WindowInfo | null> {
-  const windowInfo = await invoke<WindowInfoRaw | null>("wb_capture_window_under_cursor");
+export async function captureFocusedWindow(): Promise<WindowInfo | null> {
+  const windowInfo = await invoke<WindowInfoRaw | null>("wb_capture_focused_window");
   return windowInfo ? mapWindowInfo(windowInfo) : null;
 }
 

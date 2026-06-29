@@ -101,22 +101,25 @@ pub fn wb_enumerate_windows() -> Result<Vec<WindowInfo>, String> {
 }
 
 #[tauri::command]
-pub fn wb_capture_window_under_cursor() -> Result<Option<WindowInfo>, String> {
+pub fn wb_capture_focused_window(app: AppHandle) -> Result<Option<WindowInfo>, String> {
     #[cfg(target_os = "windows")]
     {
-        let Some((source_hwnd, _title)) = crate::drag_capture::hotkey::get_window_under_cursor()
-        else {
+        let Some((source_hwnd, _title)) = crate::drag_capture::hotkey::get_focused_window() else {
             return Ok(None);
         };
+        let workbench_hwnd = get_workbench_hwnd(&app)?;
+        if source_hwnd == workbench_hwnd {
+            return Ok(None);
+        }
 
         let windows = enumerator::enumerate_windows().map_err(|e| e.to_string())?;
         let Some(info) = windows.into_iter().find(|w| w.hwnd == source_hwnd) else {
-            return Err("Window under cursor is not eligible for capture".to_string());
+            return Err("Focused window is not eligible for capture".to_string());
         };
 
         if !info.is_compatible {
             return Err(format!(
-                "Window is not compatible: {}",
+                "Focused window is not compatible: {}",
                 info.incompatibility_reason
                     .as_deref()
                     .unwrap_or("Unknown reason")

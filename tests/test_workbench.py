@@ -34,6 +34,8 @@ class TestWorkbenchRuntimeShape:
         )
 
         assert "commands::workbench_cmds::wb_add_thumbnail" in lib_rs
+        assert "commands::workbench_cmds::wb_capture_focused_window" in lib_rs
+        assert "commands::workbench_cmds::wb_capture_window_under_cursor" not in lib_rs
         assert "commands::workbench_cmds::wb_update_thumbnail_rect" in lib_rs
         assert "commands::workbench_cmds::wb_open_tool_window" in lib_rs
         assert "commands::settings_cmds::set_settings" in lib_rs
@@ -64,6 +66,9 @@ class TestWorkbenchRuntimeShape:
         workbench_cmds = (
             repo_root / "src-tauri/src/commands/workbench_cmds.rs"
         ).read_text(encoding="utf-8")
+        hotkey_rs = (
+            repo_root / "src-tauri/src/drag_capture/hotkey.rs"
+        ).read_text(encoding="utf-8")
         compact_workbench_cmds = "".join(workbench_cmds.split())
 
         assert "DwmRegisterThumbnail" in dwm_rs
@@ -72,6 +77,13 @@ class TestWorkbenchRuntimeShape:
         assert "DWM_TNP_RECTDESTINATION" in manager_rs
         assert "get_webview_window(crate::WORKBENCH_WINDOW_LABEL)" in workbench_cmds
         assert ".register(dest_hwnd,source_hwnd,&panel_id)" in compact_workbench_cmds
+        assert "wb_capture_focused_window" in workbench_cmds
+        assert "get_focused_window" in workbench_cmds
+        assert "wb_capture_window_under_cursor" not in workbench_cmds
+        assert "Focused window is not eligible for capture" in workbench_cmds
+        assert "GetForegroundWindow" in hotkey_rs
+        assert "WindowFromPoint" not in hotkey_rs
+        assert "get_window_under_cursor" not in hotkey_rs
 
     def test_thumbnail_source_lifetime_is_checked(self, repo_root):
         manager_rs = (repo_root / "src-tauri/src/thumbnail/manager.rs").read_text(
@@ -361,12 +373,18 @@ class TestWorkbenchPersistenceShape:
         canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
             encoding="utf-8"
         )
+        workbench_api = (repo_root / "src/lib/workbench-api.ts").read_text(
+            encoding="utf-8"
+        )
 
         assert "./lib/settings-api" in main_tsx
         assert "./settings-api" in i18n_tsx
         assert "../lib/workbench-api" in canvas_tsx
         assert "saveLayout" in canvas_tsx
-        assert "captureWindowUnderCursor" in canvas_tsx
+        assert "captureFocusedWindow" in canvas_tsx
+        assert "captureWindowUnderCursor" not in canvas_tsx
+        assert 'invoke<WindowInfoRaw | null>("wb_capture_focused_window")' in workbench_api
+        assert "wb_capture_window_under_cursor" not in workbench_api
         assert "openToolWindow" in canvas_tsx
 
     def test_settings_window_has_capability_and_camel_case_contract(self, repo_root):

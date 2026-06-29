@@ -8,7 +8,7 @@ import { useI18n } from "../lib/i18n";
 import { snap } from "../lib/snap-engine";
 import {
   addThumbnail,
-  captureWindowUnderCursor,
+  captureFocusedWindow,
   focusSource,
   removePanel,
   updateThumbnailRect,
@@ -548,12 +548,12 @@ export function WorkbenchCanvas() {
       });
       const unlistenCaptureHotkey = await listen("tray:capture-hotkey", async () => {
         try {
-          const windowInfo = await captureWindowUnderCursor();
+          const windowInfo = await captureFocusedWindow();
           if (windowInfo) {
             await addThumbnailPanel(windowInfo.hwnd, windowInfo.title);
           }
         } catch (e) {
-          console.error("Failed to capture window under cursor:", e);
+          console.error("Failed to capture focused window:", e);
           showNotice(t("app.toast.captureFailed", { reason: errorMessage(e) }));
         }
       });

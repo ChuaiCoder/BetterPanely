@@ -1,19 +1,11 @@
 #[cfg(target_os = "windows")]
-use windows::{
-    Win32::UI::WindowsAndMessaging::*,
-    Win32::Foundation::*,
-};
+use windows::Win32::UI::WindowsAndMessaging::*;
 
-/// Get information about the window currently under the cursor
+/// Get information about the currently focused foreground window.
 #[cfg(target_os = "windows")]
-pub fn get_window_under_cursor() -> Option<(isize, String)> {
+pub fn get_focused_window() -> Option<(isize, String)> {
     unsafe {
-        let mut cursor_pos = POINT::default();
-        if GetCursorPos(&mut cursor_pos).is_err() {
-            return None;
-        }
-
-        let hwnd = WindowFromPoint(cursor_pos);
+        let hwnd = GetForegroundWindow();
         if hwnd.0 == std::ptr::null_mut() {
             return None;
         }
@@ -31,6 +23,6 @@ pub fn get_window_under_cursor() -> Option<(isize, String)> {
 
 // Non-Windows stubs
 #[cfg(not(target_os = "windows"))]
-pub fn get_window_under_cursor() -> Option<(isize, String)> {
+pub fn get_focused_window() -> Option<(isize, String)> {
     None
 }
