@@ -26,6 +26,11 @@ interface WorkbenchNotice {
   message: string;
 }
 
+interface CanvasContextMenu {
+  x: number;
+  y: number;
+}
+
 /**
  * 工作台主画布组件
  * 管理所有面板的布局、拖拽、磁性吸附、状态持久化等核心功能
@@ -41,6 +46,7 @@ export function WorkbenchCanvas() {
   const [layoutReady, setLayoutReady] = createSignal(false);
   const [selectedPanelId, setSelectedPanelId] = createSignal<string | null>(null);
   const [notices, setNotices] = createSignal<WorkbenchNotice[]>([]);
+  const [contextMenu, setContextMenu] = createSignal<CanvasContextMenu | null>(null);
 
   let canvasRef!: HTMLDivElement;
   let saveTimer: number | undefined;
@@ -196,6 +202,7 @@ export function WorkbenchCanvas() {
 
   const handleDragStart = (panelId: string, offsetX: number, offsetY: number) => {
     handleSelectPanel(panelId);
+    setContextMenu(null);
     setDraggingId(panelId);
     setDragOffset({ x: offsetX, y: offsetY });
     handleTop(panelId);
@@ -218,6 +225,14 @@ export function WorkbenchCanvas() {
 
     await focusPanel(panel);
   };
+
+  const saveCurrentLayout = () =>
+    saveLayout(panels())
+      .then(() => showNotice(t("app.toast.layoutSaved"), "success"))
+      .catch((error) => {
+        console.error("Failed to save layout:", error);
+        showNotice(t("app.toast.saveLayoutFailed", { reason: errorMessage(error) }));
+      });
 
   const focusPanel = async (panel: PanelState) => {
     if (panel.type === "thumbnail" && panel.sourceHwnd) {
@@ -252,12 +267,7 @@ export function WorkbenchCanvas() {
 
     if (e.ctrlKey && !e.shiftKey && key === "s") {
       e.preventDefault();
-      saveLayout(panels())
-        .then(() => showNotice(t("app.toast.layoutSaved"), "success"))
-        .catch((error) => {
-          console.error("Failed to save layout:", error);
-          showNotice(t("app.toast.saveLayoutFailed", { reason: errorMessage(error) }));
-        });
+      saveCurrentLayout();
       return;
     }
 
@@ -312,6 +322,47 @@ export function WorkbenchCanvas() {
 
       return prev.map((p) => (p.id === activePanelId ? movedPanel : p));
     });
+  };
+
+  const handleCanvasContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
+
+    if ((e.target as HTMLElement).closest(".panel-card")) {
+      setContextMenu(null);
+      return;
+    }
+
+    const canvasRect = canvasRef.getBoundingClientRect();
+    const menuWidth = 180;
+    const menuHeight = 88;
+    const x = Math.min(
+      Math.max(8, e.clientX - canvasRect.left),
+      Math.max(8, canvasRect.width - menuWidth - 8)
+    );
+    const y = Math.min(
+      Math.max(8, e.clientY - canvasRect.top),
+      Math.max(8, canvasRect.height - menuHeight - 8)
+    );
+
+    setContextMenu({ x, y });
+  };
+
+  const handleCanvasClick = () => {
+    if (contextMenu()) {
+      setContextMenu(null);
+    }
+  };
+
+  const handleContextAddPanel = (e: MouseEvent) => {
+    e.stopPropagation();
+    setContextMenu(null);
+    setIsDialogOpen(true);
+  };
+
+  const handleContextSaveLayout = (e: MouseEvent) => {
+    e.stopPropagation();
+    setContextMenu(null);
+    saveCurrentLayout();
   };
 
   const handleMouseUp = async () => {
@@ -451,6 +502,8 @@ export function WorkbenchCanvas() {
       <div
         ref={canvasRef}
         class="workbench-canvas"
+        onClick={handleCanvasClick}
+        onContextMenu={handleCanvasContextMenu}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
@@ -503,6 +556,23 @@ export function WorkbenchCanvas() {
               {t("app.addPanel")}
             </button>
           </div>
+        </Show>
+
+        <Show when={contextMenu()}>
+          {(menu) => (
+            <div
+              class="canvas-context-menu"
+              style={{ left: `${menu().x}px`, top: `${menu().y}px` }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button type="button" onClick={handleContextAddPanel}>
+                {t("app.addPanel")}
+              </button>
+              <button type="button" onClick={handleContextSaveLayout}>
+                {t("app.saveLayout")}
+              </button>
+            </div>
+          )}
         </Show>
       </div>
 

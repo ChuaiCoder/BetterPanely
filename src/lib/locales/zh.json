@@ -23,6 +23,7 @@
   "app.searchWindows": "按标题、程序名搜索窗口...",
   "app.cancel": "取消",
   "app.addSelected": "添加选中",
+  "app.saveLayout": "保存布局",
   "app.windowNotCapturable": "此窗口无法捕获",
   "app.toast.addThumbnailFailed": "添加面板失败: {reason}",
   "app.toast.captureFailed": "捕获窗口失败: {reason}",

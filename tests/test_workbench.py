@@ -224,6 +224,32 @@ class TestWorkbenchRuntimeShape:
         assert "app.toast.enumerateWindowsFailed" in en_locale
         assert "app.toast.enumerateWindowsFailed" in zh_locale
 
+    def test_blank_canvas_context_menu_offers_core_actions(self, repo_root):
+        canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
+            encoding="utf-8"
+        )
+        app_css = (repo_root / "src/App.css").read_text(encoding="utf-8")
+        en_locale = (repo_root / "src/lib/locales/en.json").read_text(
+            encoding="utf-8"
+        )
+        zh_locale = (repo_root / "src/lib/locales/zh.json").read_text(
+            encoding="utf-8"
+        )
+
+        assert "interface CanvasContextMenu" in canvas_tsx
+        assert "const [contextMenu, setContextMenu]" in canvas_tsx
+        assert "handleCanvasContextMenu" in canvas_tsx
+        assert 'closest(".panel-card")' in canvas_tsx
+        assert "handleContextAddPanel" in canvas_tsx
+        assert "handleContextSaveLayout" in canvas_tsx
+        assert "saveCurrentLayout" in canvas_tsx
+        assert 'onContextMenu={handleCanvasContextMenu}' in canvas_tsx
+        assert 'class="canvas-context-menu"' in canvas_tsx
+        assert 't("app.saveLayout")' in canvas_tsx
+        assert ".canvas-context-menu" in app_css
+        assert "app.saveLayout" in en_locale
+        assert "app.saveLayout" in zh_locale
+
 
 class TestWorkbenchPersistenceShape:
     """Verify persistence belongs to the workbench layout, not legacy panels."""

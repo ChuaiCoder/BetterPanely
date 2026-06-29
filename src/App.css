@@ -126,6 +126,36 @@ body {
   background: var(--canvas-bg);
 }
 
+.canvas-context-menu {
+  position: absolute;
+  z-index: 2500;
+  display: flex;
+  min-width: 180px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-solid);
+  box-shadow: 0 8px 28px var(--shadow);
+}
+
+.canvas-context-menu button {
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+}
+
+.canvas-context-menu button:hover {
+  background: var(--surface-muted);
+}
+
 .toast-stack {
   position: fixed;
   right: 16px;

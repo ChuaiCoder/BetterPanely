@@ -23,6 +23,7 @@
   "app.searchWindows": "Search windows by title, exe name...",
   "app.cancel": "Cancel",
   "app.addSelected": "Add Selected",
+  "app.saveLayout": "Save Layout",
   "app.windowNotCapturable": "This window cannot be captured",
   "app.toast.addThumbnailFailed": "Failed to add panel: {reason}",
   "app.toast.captureFailed": "Failed to capture window: {reason}",
