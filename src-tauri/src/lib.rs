@@ -1,39 +1,28 @@
-mod panel_manager;
 mod window_embedder;
 mod drag_capture;
 mod commands;
-mod builtin_tools;
 mod locales;
 mod state;
 mod tray;
 mod thumbnail;
 
-use panel_manager::PanelManager;
 use state::AppStateManager;
-use drag_capture::hook::DragCaptureState;
 use thumbnail::SharedThumbnailManager;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
 /// Application state shared across all handlers
 pub struct AppState {
-    pub panel_manager: Mutex<PanelManager>,
     pub state_manager: Mutex<AppStateManager>,
-    pub drag_capture: Option<Arc<DragCaptureState>>,
-    pub thumbnail_manager: SharedThumbnailManager,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::init();
 
-    let drag_state = DragCaptureState::new();
     let thumbnail_manager = SharedThumbnailManager::new();
     let app_state = AppState {
-        panel_manager: Mutex::new(PanelManager::new()),
         state_manager: Mutex::new(AppStateManager::new()),
-        drag_capture: Some(drag_state.clone()),
-        thumbnail_manager: thumbnail_manager.clone(),
     };
 
     tauri::Builder::default()
@@ -53,47 +42,7 @@ pub fn run() {
                 log::warn!("Failed to load saved state: {}", e);
             }
             let current_lang = state_mgr.get_language();
-            let saved_panels = state_mgr.take_loaded_panels();
             drop(state_mgr);
-
-            // Restore tool panels from saved state
-            {
-                let mut panel_mgr = state.panel_manager.lock().unwrap();
-                for saved in &saved_panels {
-                    if let Some(ref tool_id) = saved.tool_id {
-                        let panel_type = panel_manager::panel::PanelType::Tool {
-                            tool_id: tool_id.clone(),
-                        };
-                        let panel = panel_mgr.create(
-                            saved.title.clone(),
-                            panel_type.clone(),
-                            Some(saved.width),
-                            Some(saved.height),
-                        ).clone();
-                        if let Some(p) = panel_mgr.get_mut(&panel.id) {
-                            p.x = saved.x;
-                            p.y = saved.y;
-                            p.always_on_top = saved.always_on_top;
-                            p.opacity = saved.opacity;
-                        }
-
-                        // Create the WebView immediately
-                        let url = match tool_id.as_str() {
-                            "calculator" => "src/tools/calculator/index.html",
-                            "notes" => "src/tools/notes/index.html",
-                            "timer" => "src/tools/timer/index.html",
-                            "weather" => "src/tools/weather/index.html",
-                            _ => continue,
-                        };
-                        if let Some(p) = panel_mgr.get_mut(&panel.id) {
-                            if let Err(e) = p.create_webview(app.handle(), url, &current_lang) {
-                                log::warn!("Failed to restore panel {}: {}", panel.id, e);
-                            }
-                        }
-                    }
-                }
-                log::info!("Restored {} panels from saved state", saved_panels.len());
-            }
 
             // Initialize system tray with loaded language
             tray::create_tray(app.handle(), &current_lang)?;
@@ -117,30 +66,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::panel_cmds::create_panel,
-            commands::panel_cmds::destroy_panel,
-            commands::panel_cmds::list_panels,
-            commands::panel_cmds::get_panel,
-            commands::panel_cmds::move_panel,
-            commands::panel_cmds::resize_panel,
-            commands::panel_cmds::set_panel_always_on_top,
-            commands::panel_cmds::set_panel_opacity,
-            commands::panel_cmds::set_panel_click_through,
-            commands::embed_cmds::enumerate_windows,
-            commands::embed_cmds::refresh_window_list,
-            commands::embed_cmds::embed_window,
-            commands::embed_cmds::release_window,
-            commands::embed_cmds::start_drag_capture,
-            commands::embed_cmds::stop_drag_capture,
-            commands::embed_cmds::capture_window_via_hotkey,
-            commands::tool_cmds::launch_tool,
-            commands::tool_cmds::list_tools,
-            commands::tool_cmds::open_settings,
-            commands::tool_cmds::save_state,
-            commands::tool_cmds::load_state,
             commands::settings_cmds::get_settings,
             commands::settings_cmds::get_language,
             commands::settings_cmds::set_language,
+            commands::settings_cmds::open_settings,
             commands::workbench_cmds::wb_enumerate_windows,
             commands::workbench_cmds::wb_capture_window_under_cursor,
             commands::workbench_cmds::wb_add_thumbnail,

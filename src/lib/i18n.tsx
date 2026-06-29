@@ -1,6 +1,6 @@
 import { createSignal, createContext, useContext } from "solid-js";
 import type { JSX } from "solid-js";
-import { setLanguage as setLangBackend, onLanguageChanged } from "./panel-api";
+import { setLanguage as setLangBackend, onLanguageChanged } from "./settings-api";
 import enLocale from "./locales/en.json";
 import zhLocale from "./locales/zh.json";
 

@@ -2,7 +2,7 @@
 import { render } from "solid-js/web";
 import App from "./App";
 import { createI18n } from "./lib/i18n.tsx";
-import { getLanguage } from "./lib/panel-api";
+import { getLanguage } from "./lib/settings-api";
 import type { Lang } from "./lib/i18n.tsx";
 
 async function bootstrap() {

@@ -1,4 +1,3 @@
-use crate::panel_manager::PanelManager;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -7,22 +6,10 @@ use tauri::{AppHandle, Manager};
 /// Persisted application state
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct PersistedState {
-    pub panels: Vec<PersistedPanel>,
+    #[serde(default, rename = "panels")]
+    pub _panels: Vec<serde_json::Value>,
+    #[serde(default)]
     pub settings: AppSettings,
-}
-
-/// A simplified panel for persistence (no runtime-only fields)
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PersistedPanel {
-    pub id: String,
-    pub title: String,
-    pub tool_id: Option<String>,
-    pub x: f64,
-    pub y: f64,
-    pub width: f64,
-    pub height: f64,
-    pub always_on_top: bool,
-    pub opacity: f64,
 }
 
 /// Workbench panel layout for persistence
@@ -65,7 +52,6 @@ impl Default for AppSettings {
 pub struct AppStateManager {
     state_path: PathBuf,
     pub settings: AppSettings,
-    loaded_panels: Vec<PersistedPanel>,
 }
 
 impl AppStateManager {
@@ -74,7 +60,6 @@ impl AppStateManager {
         Self {
             state_path,
             settings: AppSettings::default(),
-            loaded_panels: Vec::new(),
         }
     }
 
@@ -98,52 +83,22 @@ impl AppStateManager {
         self.settings.language.clone()
     }
 
-    /// Take loaded panels (consumes them, used once at startup)
-    pub fn take_loaded_panels(&mut self) -> Vec<PersistedPanel> {
-        std::mem::take(&mut self.loaded_panels)
-    }
-
-    /// Save current state to disk
-    pub fn save(
-        &self,
-        _app_handle: &AppHandle,
-        panel_manager: &PanelManager,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    /// Save current app settings to disk.
+    pub fn save_settings(&self) -> Result<(), Box<dyn std::error::Error>> {
         // Create the directory if it doesn't exist
         if let Some(parent) = self.state_path.parent() {
             fs::create_dir_all(parent)?;
         }
 
-        let panels: Vec<PersistedPanel> = panel_manager
-            .list()
-            .iter()
-            .map(|p| PersistedPanel {
-                id: p.id.clone(),
-                title: p.title.clone(),
-                tool_id: match &p.panel_type {
-                    crate::panel_manager::panel::PanelType::Tool { tool_id } => {
-                        Some(tool_id.clone())
-                    }
-                    _ => None,
-                },
-                x: p.x,
-                y: p.y,
-                width: p.width,
-                height: p.height,
-                always_on_top: p.always_on_top,
-                opacity: p.opacity,
-            })
-            .collect();
-
         let state = PersistedState {
-            panels,
+            _panels: Vec::new(),
             settings: self.settings.clone(),
         };
 
         let json = serde_json::to_string_pretty(&state)?;
         fs::write(&self.state_path, json)?;
 
-        log::info!("State saved to {:?}", self.state_path);
+        log::info!("Settings saved to {:?}", self.state_path);
         Ok(())
     }
 
@@ -162,14 +117,8 @@ impl AppStateManager {
 
         // Restore settings
         self.settings = persisted.settings;
-        // Store loaded panels for restoration
-        self.loaded_panels = persisted.panels;
 
-        log::info!(
-            "Loaded state with {} panels from {:?}",
-            self.loaded_panels.len(),
-            self.state_path
-        );
+        log::info!("Loaded settings from {:?}", self.state_path);
 
         Ok(())
     }

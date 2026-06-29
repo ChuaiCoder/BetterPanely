@@ -10,7 +10,6 @@ pub struct ThumbnailManager {
 }
 
 pub struct ThumbnailHandle {
-    source_hwnd: isize,
     thumbnail_id: DwmThumbnailId,
     dest_rect: RECT,
     visible: bool,
@@ -47,7 +46,6 @@ impl ThumbnailManager {
         )?;
 
         let handle = ThumbnailHandle {
-            source_hwnd,
             thumbnail_id,
             dest_rect: RECT { left: 0, top: 0, right: 100, bottom: 100 },
             visible: true,
@@ -120,10 +118,6 @@ impl ThumbnailManager {
         }
     }
 
-    pub fn get_source_hwnd(&self, panel_id: &str) -> Option<isize> {
-        self.thumbnails.get(panel_id).map(|handle| handle.source_hwnd)
-    }
-
 }
 
 #[derive(Clone)]
@@ -178,7 +172,4 @@ impl SharedThumbnailManager {
         self.inner.lock().unwrap().next_panel_id()
     }
 
-    pub fn get_source_hwnd(&self, panel_id: &str) -> Option<isize> {
-        self.inner.lock().unwrap().get_source_hwnd(panel_id)
-    }
 }

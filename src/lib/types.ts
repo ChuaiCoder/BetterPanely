@@ -1,32 +1,3 @@
-/** Panel type discriminator */
-export type PanelType =
-  | { type: "tool"; toolId: string }
-  | { type: "embedded"; embedInfo: EmbedInfo | null };
-
-/** Information about an embedded window */
-export interface EmbedInfo {
-  sourceHwnd: number;
-  sourceTitle: string;
-  sourceExe: string;
-  originalStyle: number;
-  originalParent: number;
-  threadId: number;
-}
-
-/** A panel managed by the system */
-export interface Panel {
-  id: string;
-  title: string;
-  panelType: PanelType;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  alwaysOnTop: boolean;
-  opacity: number;
-  clickThrough: boolean;
-}
-
 /** Workbench panel state */
 export interface PanelState {
   id: string;
@@ -70,19 +41,6 @@ export interface ToolDefinition {
   defaultWidth: number;
   defaultHeight: number;
   url: string;
-}
-
-/** Event emitted when a window is being dragged */
-export interface DragEvent {
-  hwnd: number;
-  mouseX: number;
-  mouseY: number;
-}
-
-/** State persisted to disk */
-export interface AppState {
-  panels: Panel[];
-  settings: AppSettings;
 }
 
 export interface AppSettings {

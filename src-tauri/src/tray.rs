@@ -145,10 +145,8 @@ fn handle_tray_menu(app_handle: &AppHandle, menu_id: &str) {
             }
         }
         "quit" => {
-            let state = app_handle.state::<crate::AppState>();
-            if let Ok(mut manager) = state.panel_manager.lock() {
-                let _ = manager.cleanup_all(app_handle);
-            }
+            let thumbnails = app_handle.state::<crate::thumbnail::SharedThumbnailManager>();
+            thumbnails.unregister_all();
             app_handle.exit(0);
         }
         _ => {}
