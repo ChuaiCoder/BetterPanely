@@ -52,6 +52,12 @@ pub fn run() {
                 if let Err(e) = thumbnails.install_source_lifecycle_hook(app.handle().clone()) {
                     log::warn!("Failed to install source window lifecycle hook: {}", e);
                 }
+
+                if let Err(e) =
+                    drag_capture::monitor::install_drag_capture_monitor(app.handle().clone())
+                {
+                    log::warn!("Failed to install drag capture monitor: {}", e);
+                }
             }
 
             // Initialize system tray with loaded language

@@ -37,6 +37,18 @@ interface SourceClosedPayload {
   sourceHwnd: number;
 }
 
+interface DragEnteredWorkbenchPayload {
+  sourceHwnd: number;
+  title: string;
+  x: number;
+  y: number;
+}
+
+interface PanelInitialPosition {
+  x: number;
+  y: number;
+}
+
 /**
  * 工作台主画布组件
  * 管理所有面板的布局、拖拽、磁性吸附、状态持久化等核心功能
@@ -62,6 +74,9 @@ export function WorkbenchCanvas() {
     const max = panels().reduce((acc, p) => Math.max(acc, p.zIndex), 0);
     return max + 1;
   };
+
+  const clamp = (value: number, min: number, max: number) =>
+    Math.min(Math.max(value, min), max);
 
   const errorMessage = (error: unknown) =>
     error instanceof Error ? error.message : String(error);
@@ -126,6 +141,34 @@ export function WorkbenchCanvas() {
     });
   };
 
+  const getPanelInitialPosition = (
+    width: number,
+    height: number,
+    initialPosition?: PanelInitialPosition
+  ) => {
+    if (!initialPosition) {
+      return {
+        x: 100 + panels().length * 20,
+        y: 100 + panels().length * 20,
+      };
+    }
+
+    return {
+      x: clamp(initialPosition.x - width / 2, 8, Math.max(8, canvasSize().width - width - 8)),
+      y: clamp(initialPosition.y - height / 2, 8, Math.max(8, canvasSize().height - height - 8)),
+    };
+  };
+
+  const workbenchClientPositionToCanvas = (
+    payload: DragEnteredWorkbenchPayload
+  ): PanelInitialPosition => {
+    const canvasRect = canvasRef.getBoundingClientRect();
+    return {
+      x: payload.x - canvasRect.left,
+      y: payload.y - canvasRect.top,
+    };
+  };
+
   createEffect(() => {
     const ready = layoutReady();
     const snapshot = panels();
@@ -139,18 +182,25 @@ export function WorkbenchCanvas() {
     }, 400);
   });
 
-  const addThumbnailPanel = async (hwnd: number, title: string) => {
+  const addThumbnailPanel = async (
+    hwnd: number,
+    title: string,
+    initialPosition?: PanelInitialPosition
+  ) => {
     try {
       const panelId = await addThumbnail(hwnd);
+      const width = 200;
+      const height = 150;
+      const position = getPanelInitialPosition(width, height, initialPosition);
       const newPanel: PanelState = {
         id: panelId,
         type: "thumbnail",
         sourceHwnd: hwnd,
         title,
-        x: 100 + panels().length * 20,
-        y: 100 + panels().length * 20,
-        width: 200,
-        height: 150,
+        x: position.x,
+        y: position.y,
+        width,
+        height,
         zIndex: getNextZIndex(),
         visible: true,
       };
@@ -480,11 +530,19 @@ export function WorkbenchCanvas() {
           removeClosedSourcePanel(event.payload.panelId, event.payload.sourceHwnd);
         }
       );
+      const unlistenDragEntered = await listen<DragEnteredWorkbenchPayload>(
+        "drag:entered-workbench",
+        async (event) => {
+          const position = workbenchClientPositionToCanvas(event.payload);
+          await addThumbnailPanel(event.payload.sourceHwnd, event.payload.title, position);
+        }
+      );
 
       addCleanup(unlistenNewPanel);
       addCleanup(unlistenLaunchTool);
       addCleanup(unlistenCaptureHotkey);
       addCleanup(unlistenSourceClosed);
+      addCleanup(unlistenDragEntered);
     })();
 
     const thumbnailHealthTimer = window.setInterval(

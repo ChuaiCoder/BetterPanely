@@ -258,6 +258,35 @@ class TestWorkbenchRuntimeShape:
         assert "app.saveLayout" in en_locale
         assert "app.saveLayout" in zh_locale
 
+    def test_dragged_windows_entering_workbench_emit_add_panel_event(self, repo_root):
+        drag_mod = (repo_root / "src-tauri/src/drag_capture/mod.rs").read_text(
+            encoding="utf-8"
+        )
+        drag_monitor = (
+            repo_root / "src-tauri/src/drag_capture/monitor.rs"
+        ).read_text(encoding="utf-8")
+        lib_rs = (repo_root / "src-tauri/src/lib.rs").read_text(encoding="utf-8")
+        canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
+            encoding="utf-8"
+        )
+
+        assert "pub mod monitor" in drag_mod
+        assert "install_drag_capture_monitor" in lib_rs
+        assert "SetWinEventHook" in drag_monitor
+        assert "EVENT_SYSTEM_MOVESIZESTART_ID" in drag_monitor
+        assert "EVENT_SYSTEM_MOVESIZEEND_ID" in drag_monitor
+        assert "WINEVENT_SKIPOWNPROCESS" in drag_monitor
+        assert "DragEnteredWorkbenchPayload" in drag_monitor
+        assert '"drag:entered-workbench"' in drag_monitor
+        assert "cursor_position_in_workbench" in drag_monitor
+        assert "payload_for_source" in drag_monitor
+        assert "window.is_compatible" in drag_monitor
+        assert "listen<DragEnteredWorkbenchPayload>" in canvas_tsx
+        assert '"drag:entered-workbench"' in canvas_tsx
+        assert "workbenchClientPositionToCanvas" in canvas_tsx
+        assert "addThumbnailPanel(event.payload.sourceHwnd" in canvas_tsx
+        assert "initialPosition?: PanelInitialPosition" in canvas_tsx
+
 
 class TestWorkbenchPersistenceShape:
     """Verify persistence belongs to the workbench layout, not legacy panels."""

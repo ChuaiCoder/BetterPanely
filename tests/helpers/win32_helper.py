@@ -3,6 +3,7 @@ Win32 helper utilities for interacting with BetterPanely from Python tests.
 Uses ctypes (stdlib) — no external dependencies.
 """
 import ctypes
+import time
 from ctypes import wintypes
 from pathlib import Path
 
