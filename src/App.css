@@ -154,6 +154,7 @@ body {
   background: var(--surface-strong);
   height: 32px;
   user-select: none;
+  cursor: move;
 }
 
 .panel-title {
@@ -201,6 +202,10 @@ body {
 
 .panel-content-transparent {
   background: transparent;
+}
+
+.panel-content-focusable {
+  cursor: pointer;
 }
 
 .panel-iframe {

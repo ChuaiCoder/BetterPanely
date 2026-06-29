@@ -30,12 +30,17 @@ export function ToolPanel(props: ToolPanelProps) {
     : "";
 
   const handleMouseDown = (e: MouseEvent) => {
-    if ((e.target as HTMLElement).closest(".panel-close") ||
-        (e.target as HTMLElement).closest(".panel-top")) {
+    if (
+      (e.target as HTMLElement).closest(".panel-close") ||
+      (e.target as HTMLElement).closest(".panel-top")
+    ) {
       return;
     }
 
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const card = (e.currentTarget as HTMLElement).closest(".panel-card");
+    if (!card) return;
+
+    const rect = card.getBoundingClientRect();
     const offsetX = e.clientX - rect.left;
     const offsetY = e.clientY - rect.top;
     props.onDragStart(props.panel.id, offsetX, offsetY);
@@ -55,11 +60,10 @@ export function ToolPanel(props: ToolPanelProps) {
         height: `${props.panel.height}px`,
         "z-index": props.panel.zIndex,
       }}
-      onMouseDown={handleMouseDown}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div class="panel-header">
+      <div class="panel-header" onMouseDown={handleMouseDown}>
         <span class="panel-title">{props.panel.title}</span>
         <div class="panel-actions">
           <button

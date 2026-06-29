@@ -116,6 +116,30 @@ class TestWorkbenchRuntimeShape:
         assert "app.windowNotCapturable" in en_locale
         assert "app.windowNotCapturable" in zh_locale
 
+    def test_panel_drag_starts_from_header_and_thumbnail_content_focuses(self, repo_root):
+        thumb_panel = (repo_root / "src/components/ThumbPanel.tsx").read_text(
+            encoding="utf-8"
+        )
+        tool_panel = (repo_root / "src/components/ToolPanel.tsx").read_text(
+            encoding="utf-8"
+        )
+        app_css = (repo_root / "src/App.css").read_text(encoding="utf-8")
+
+        assert 'onMouseDown={handleMouseDown}' not in thumb_panel.split(
+            '<div class="panel-header"'
+        )[0]
+        assert 'onMouseDown={handleMouseDown}' not in tool_panel.split(
+            '<div class="panel-header"'
+        )[0]
+        assert '<div class="panel-header" onMouseDown={handleMouseDown}>' in thumb_panel
+        assert '<div class="panel-header" onMouseDown={handleMouseDown}>' in tool_panel
+        assert 'closest(".panel-card")' in thumb_panel
+        assert 'closest(".panel-card")' in tool_panel
+        assert 'class="panel-content panel-content-transparent panel-content-focusable"' in thumb_panel
+        assert "onClick={handleFocus}" in thumb_panel
+        assert ".panel-content-focusable" in app_css
+        assert "cursor: move" in app_css
+
 
 class TestWorkbenchPersistenceShape:
     """Verify persistence belongs to the workbench layout, not legacy panels."""
