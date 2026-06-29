@@ -9,6 +9,7 @@ import { snap } from "../lib/snap-engine";
 import {
   addThumbnail,
   captureWindowUnderCursor,
+  focusSource,
   removePanel,
   updateThumbnailRect,
   loadLayout,
@@ -31,6 +32,7 @@ export function WorkbenchCanvas() {
   const [isDialogOpen, setIsDialogOpen] = createSignal(false);
   const [canvasSize, setCanvasSize] = createSignal({ width: 800, height: 600 });
   const [layoutReady, setLayoutReady] = createSignal(false);
+  const [selectedPanelId, setSelectedPanelId] = createSignal<string | null>(null);
 
   let canvasRef!: HTMLDivElement;
   let saveTimer: number | undefined;
@@ -62,6 +64,9 @@ export function WorkbenchCanvas() {
         message.includes("source window is no longer available") ||
         message.includes("thumbnail not found")
       ) {
+        if (selectedPanelId() === panel.id) {
+          setSelectedPanelId(null);
+        }
         setPanels((prev) => prev.filter((p) => p.id !== panel.id));
         return false;
       }
@@ -146,9 +151,16 @@ export function WorkbenchCanvas() {
     try {
       await removePanel(panelId);
       setPanels((prev) => prev.filter((p) => p.id !== panelId));
+      if (selectedPanelId() === panelId) {
+        setSelectedPanelId(null);
+      }
     } catch (e) {
       console.error("Failed to remove panel:", e);
     }
+  };
+
+  const handleSelectPanel = (panelId: string) => {
+    setSelectedPanelId(panelId);
   };
 
   const handleTop = (panelId: string) => {
@@ -158,9 +170,66 @@ export function WorkbenchCanvas() {
   };
 
   const handleDragStart = (panelId: string, offsetX: number, offsetY: number) => {
+    handleSelectPanel(panelId);
     setDraggingId(panelId);
     setDragOffset({ x: offsetX, y: offsetY });
     handleTop(panelId);
+  };
+
+  const isEditableShortcutTarget = (target: EventTarget | null) => {
+    if (!(target instanceof HTMLElement)) return false;
+    const tagName = target.tagName.toLowerCase();
+    return (
+      tagName === "input" ||
+      tagName === "textarea" ||
+      tagName === "select" ||
+      target.isContentEditable
+    );
+  };
+
+  const focusSelectedPanel = async () => {
+    const panel = panels().find((p) => p.id === selectedPanelId());
+    if (!panel) return;
+
+    if (panel.type === "thumbnail" && panel.sourceHwnd) {
+      await focusSource(panel.sourceHwnd);
+    } else {
+      handleTop(panel.id);
+    }
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (isEditableShortcutTarget(e.target)) return;
+
+    const key = e.key.toLowerCase();
+
+    if (e.ctrlKey && !e.shiftKey && key === "n") {
+      e.preventDefault();
+      setIsDialogOpen(true);
+      return;
+    }
+
+    if (e.ctrlKey && !e.shiftKey && key === "s") {
+      e.preventDefault();
+      saveLayout(panels()).catch(console.error);
+      return;
+    }
+
+    if (isDialogOpen()) return;
+
+    if (e.ctrlKey && e.shiftKey && key === "f") {
+      e.preventDefault();
+      focusSelectedPanel().catch(console.error);
+      return;
+    }
+
+    if (e.key === "Delete") {
+      const panelId = selectedPanelId();
+      if (!panelId) return;
+
+      e.preventDefault();
+      void handleClosePanel(panelId);
+    }
   };
 
   const handleMouseMove = (e: MouseEvent) => {
@@ -256,6 +325,7 @@ export function WorkbenchCanvas() {
     };
 
     window.addEventListener("resize", handleResize);
+    window.addEventListener("keydown", handleKeyDown);
     handleResize();
 
     (async () => {
@@ -297,6 +367,7 @@ export function WorkbenchCanvas() {
     onCleanup(() => {
       disposed = true;
       window.removeEventListener("resize", handleResize);
+      window.removeEventListener("keydown", handleKeyDown);
       window.clearInterval(thumbnailHealthTimer);
       cleanupFns.forEach((cleanup) => cleanup());
       if (saveTimer !== undefined) {
@@ -335,7 +406,9 @@ export function WorkbenchCanvas() {
               <ThumbPanel
                 panel={panel}
                 isDragging={draggingId() === panel.id}
+                isSelected={selectedPanelId() === panel.id}
                 onDragStart={handleDragStart}
+                onSelect={handleSelectPanel}
                 onClose={handleClosePanel}
                 onTop={handleTop}
               />
@@ -343,7 +416,9 @@ export function WorkbenchCanvas() {
               <ToolPanel
                 panel={panel}
                 isDragging={draggingId() === panel.id}
+                isSelected={selectedPanelId() === panel.id}
                 onDragStart={handleDragStart}
+                onSelect={handleSelectPanel}
                 onClose={handleClosePanel}
                 onTop={handleTop}
               />

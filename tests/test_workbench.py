@@ -140,6 +140,40 @@ class TestWorkbenchRuntimeShape:
         assert ".panel-content-focusable" in app_css
         assert "cursor: move" in app_css
 
+    def test_workbench_keyboard_shortcuts_use_selected_panel(self, repo_root):
+        canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
+            encoding="utf-8"
+        )
+        thumb_panel = (repo_root / "src/components/ThumbPanel.tsx").read_text(
+            encoding="utf-8"
+        )
+        tool_panel = (repo_root / "src/components/ToolPanel.tsx").read_text(
+            encoding="utf-8"
+        )
+        app_css = (repo_root / "src/App.css").read_text(encoding="utf-8")
+
+        assert "selectedPanelId" in canvas_tsx
+        assert 'window.addEventListener("keydown", handleKeyDown)' in canvas_tsx
+        assert 'window.removeEventListener("keydown", handleKeyDown)' in canvas_tsx
+        assert 'key === "n"' in canvas_tsx
+        assert 'key === "s"' in canvas_tsx
+        assert 'key === "f"' in canvas_tsx
+        assert 'e.key === "Delete"' in canvas_tsx
+        assert "isEditableShortcutTarget" in canvas_tsx
+        assert "isDialogOpen()" in canvas_tsx
+        assert "focusSelectedPanel" in canvas_tsx
+        assert "focusSource(panel.sourceHwnd)" in canvas_tsx
+        assert "saveLayout(panels()).catch(console.error)" in canvas_tsx
+        assert "isSelected={selectedPanelId() === panel.id}" in canvas_tsx
+        assert "onSelect={handleSelectPanel}" in canvas_tsx
+        assert "isSelected: boolean" in thumb_panel
+        assert "isSelected: boolean" in tool_panel
+        assert "props.onSelect(props.panel.id)" in thumb_panel
+        assert "props.onSelect(props.panel.id)" in tool_panel
+        assert "panel-selected" in thumb_panel
+        assert "panel-selected" in tool_panel
+        assert ".panel-selected" in app_css
+
 
 class TestWorkbenchPersistenceShape:
     """Verify persistence belongs to the workbench layout, not legacy panels."""

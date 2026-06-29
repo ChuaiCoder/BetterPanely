@@ -6,7 +6,9 @@ import type { PanelState } from "../lib/types";
 interface ThumbPanelProps {
   panel: PanelState;
   isDragging: boolean;
+  isSelected: boolean;
   onDragStart: (id: string, offsetX: number, offsetY: number) => void;
+  onSelect: (id: string) => void;
   onClose: (id: string) => void;
   onTop: (id: string) => void;
 }
@@ -34,10 +36,12 @@ export function ThumbPanel(props: ThumbPanelProps) {
     const rect = card.getBoundingClientRect();
     const offsetX = e.clientX - rect.left;
     const offsetY = e.clientY - rect.top;
+    props.onSelect(props.panel.id);
     props.onDragStart(props.panel.id, offsetX, offsetY);
   };
 
   const handleFocus = () => {
+    props.onSelect(props.panel.id);
     if (props.panel.sourceHwnd) {
       focusSource(props.panel.sourceHwnd).catch(console.error);
     }
@@ -49,7 +53,7 @@ export function ThumbPanel(props: ThumbPanelProps) {
 
   return (
     <div
-      class={`panel-card ${props.isDragging ? "panel-dragging" : ""} ${isHovered() ? "panel-hovered" : ""}`}
+      class={`panel-card ${props.isDragging ? "panel-dragging" : ""} ${props.isSelected ? "panel-selected" : ""} ${isHovered() ? "panel-hovered" : ""}`}
       style={{
         left: `${props.panel.x}px`,
         top: `${props.panel.y}px`,
