@@ -1,6 +1,5 @@
 import { createSignal, Show } from "solid-js";
 import { useI18n } from "../lib/i18n";
-import { focusSource } from "../lib/workbench-api";
 import type { PanelState } from "../lib/types";
 
 interface ThumbPanelProps {
@@ -9,6 +8,7 @@ interface ThumbPanelProps {
   isSelected: boolean;
   onDragStart: (id: string, offsetX: number, offsetY: number) => void;
   onSelect: (id: string) => void;
+  onFocus: (id: string) => void;
   onClose: (id: string) => void;
   onTop: (id: string) => void;
 }
@@ -42,9 +42,7 @@ export function ThumbPanel(props: ThumbPanelProps) {
 
   const handleFocus = () => {
     props.onSelect(props.panel.id);
-    if (props.panel.sourceHwnd) {
-      focusSource(props.panel.sourceHwnd).catch(console.error);
-    }
+    props.onFocus(props.panel.id);
   };
 
   const handleTop = () => {

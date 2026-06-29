@@ -18,6 +18,13 @@ import {
 import type { PanelState, SnapGuide, WindowInfo } from "../lib/types";
 
 const PANEL_HEADER_HEIGHT = 32;
+const NOTICE_TIMEOUT_MS = 5000;
+
+interface WorkbenchNotice {
+  id: number;
+  type: "info" | "success" | "error";
+  message: string;
+}
 
 /**
  * 工作台主画布组件
@@ -33,13 +40,28 @@ export function WorkbenchCanvas() {
   const [canvasSize, setCanvasSize] = createSignal({ width: 800, height: 600 });
   const [layoutReady, setLayoutReady] = createSignal(false);
   const [selectedPanelId, setSelectedPanelId] = createSignal<string | null>(null);
+  const [notices, setNotices] = createSignal<WorkbenchNotice[]>([]);
 
   let canvasRef!: HTMLDivElement;
   let saveTimer: number | undefined;
+  const noticeTimers: number[] = [];
 
   const getNextZIndex = () => {
     const max = panels().reduce((acc, p) => Math.max(acc, p.zIndex), 0);
     return max + 1;
+  };
+
+  const errorMessage = (error: unknown) =>
+    error instanceof Error ? error.message : String(error);
+
+  const showNotice = (message: string, type: WorkbenchNotice["type"] = "error") => {
+    const id = Date.now() + noticeTimers.length;
+    setNotices((prev) => [...prev, { id, type, message }]);
+
+    const timer = window.setTimeout(() => {
+      setNotices((prev) => prev.filter((notice) => notice.id !== id));
+    }, NOTICE_TIMEOUT_MS);
+    noticeTimers.push(timer);
   };
 
   const getThumbnailRect = (panel: PanelState) => {
@@ -68,6 +90,7 @@ export function WorkbenchCanvas() {
           setSelectedPanelId(null);
         }
         setPanels((prev) => prev.filter((p) => p.id !== panel.id));
+        showNotice(t("app.toast.sourceClosed", { title: panel.title }), "info");
         return false;
       }
       throw e;
@@ -114,6 +137,7 @@ export function WorkbenchCanvas() {
       await syncThumbnailRect(newPanel);
     } catch (e) {
       console.error("Failed to add thumbnail:", e);
+      showNotice(t("app.toast.addThumbnailFailed", { reason: errorMessage(e) }));
     }
   };
 
@@ -156,6 +180,7 @@ export function WorkbenchCanvas() {
       }
     } catch (e) {
       console.error("Failed to remove panel:", e);
+      showNotice(t("app.toast.removePanelFailed", { reason: errorMessage(e) }));
     }
   };
 
@@ -191,11 +216,27 @@ export function WorkbenchCanvas() {
     const panel = panels().find((p) => p.id === selectedPanelId());
     if (!panel) return;
 
+    await focusPanel(panel);
+  };
+
+  const focusPanel = async (panel: PanelState) => {
     if (panel.type === "thumbnail" && panel.sourceHwnd) {
-      await focusSource(panel.sourceHwnd);
+      try {
+        await focusSource(panel.sourceHwnd);
+      } catch (e) {
+        console.error("Failed to focus source window:", e);
+        showNotice(t("app.toast.focusFailed", { reason: errorMessage(e) }));
+      }
     } else {
       handleTop(panel.id);
     }
+  };
+
+  const handleFocusPanel = (panelId: string) => {
+    const panel = panels().find((p) => p.id === panelId);
+    if (!panel) return;
+
+    void focusPanel(panel);
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -211,7 +252,12 @@ export function WorkbenchCanvas() {
 
     if (e.ctrlKey && !e.shiftKey && key === "s") {
       e.preventDefault();
-      saveLayout(panels()).catch(console.error);
+      saveLayout(panels())
+        .then(() => showNotice(t("app.toast.layoutSaved"), "success"))
+        .catch((error) => {
+          console.error("Failed to save layout:", error);
+          showNotice(t("app.toast.saveLayoutFailed", { reason: errorMessage(error) }));
+        });
       return;
     }
 
@@ -219,7 +265,10 @@ export function WorkbenchCanvas() {
 
     if (e.ctrlKey && e.shiftKey && key === "f") {
       e.preventDefault();
-      focusSelectedPanel().catch(console.error);
+      focusSelectedPanel().catch((error) => {
+        console.error("Failed to focus selected panel:", error);
+        showNotice(t("app.toast.focusFailed", { reason: errorMessage(error) }));
+      });
       return;
     }
 
@@ -307,6 +356,7 @@ export function WorkbenchCanvas() {
         await syncThumbnailRect(restoredPanel);
       } catch (e) {
         console.warn("Skipped stale thumbnail panel:", panel.title, e);
+        showNotice(t("app.toast.stalePanelSkipped", { title: panel.title }), "info");
       }
     }
 
@@ -336,6 +386,7 @@ export function WorkbenchCanvas() {
         }
       } catch (e) {
         console.warn("Failed to load layout:", e);
+        showNotice(t("app.toast.loadLayoutFailed", { reason: errorMessage(e) }));
       } finally {
         setLayoutReady(true);
       }
@@ -354,6 +405,7 @@ export function WorkbenchCanvas() {
           }
         } catch (e) {
           console.error("Failed to capture window under cursor:", e);
+          showNotice(t("app.toast.captureFailed", { reason: errorMessage(e) }));
         }
       });
 
@@ -374,8 +426,11 @@ export function WorkbenchCanvas() {
         window.clearTimeout(saveTimer);
       }
       if (layoutReady()) {
-        saveLayout(panels()).catch(console.error);
+        saveLayout(panels()).catch((error) => {
+          console.error("Failed to save layout:", error);
+        });
       }
+      noticeTimers.forEach((timer) => window.clearTimeout(timer));
     });
   });
 
@@ -409,6 +464,7 @@ export function WorkbenchCanvas() {
                 isSelected={selectedPanelId() === panel.id}
                 onDragStart={handleDragStart}
                 onSelect={handleSelectPanel}
+                onFocus={handleFocusPanel}
                 onClose={handleClosePanel}
                 onTop={handleTop}
               />
@@ -450,6 +506,16 @@ export function WorkbenchCanvas() {
         </Show>
       </div>
 
+      <div class="toast-stack" aria-live="polite">
+        <For each={notices()}>
+          {(notice) => (
+            <div class={`toast toast-${notice.type}`} role={notice.type === "error" ? "alert" : "status"}>
+              {notice.message}
+            </div>
+          )}
+        </For>
+      </div>
+
       <footer class="workbench-footer">
         <span>{t("app.panelCount", { count: panels().length })}</span>
       </footer>
@@ -459,6 +525,9 @@ export function WorkbenchCanvas() {
         onClose={() => setIsDialogOpen(false)}
         onAddThumbnails={handleAddThumbnails}
         onAddTool={addToolPanel}
+        onError={(error) =>
+          showNotice(t("app.toast.enumerateWindowsFailed", { reason: errorMessage(error) }))
+        }
       />
     </div>
   );

@@ -104,6 +104,8 @@ class TestWorkbenchRuntimeShape:
         )
 
         assert "windowInfo.incompatibilityReason" in dialog_tsx
+        assert "onError?: (error: unknown) => void" in dialog_tsx
+        assert "props.onError?.(error)" in dialog_tsx
         assert 't("app.windowNotCapturable")' in dialog_tsx
         assert "if (!windowInfo.isCompatible) return" in dialog_tsx
         assert "selectedHwnds().has(w.hwnd) && w.isCompatible" in dialog_tsx
@@ -163,7 +165,8 @@ class TestWorkbenchRuntimeShape:
         assert "isDialogOpen()" in canvas_tsx
         assert "focusSelectedPanel" in canvas_tsx
         assert "focusSource(panel.sourceHwnd)" in canvas_tsx
-        assert "saveLayout(panels()).catch(console.error)" in canvas_tsx
+        assert "saveLayout(panels())" in canvas_tsx
+        assert "app.toast.layoutSaved" in canvas_tsx
         assert "isSelected={selectedPanelId() === panel.id}" in canvas_tsx
         assert "onSelect={handleSelectPanel}" in canvas_tsx
         assert "isSelected: boolean" in thumb_panel
@@ -173,6 +176,53 @@ class TestWorkbenchRuntimeShape:
         assert "panel-selected" in thumb_panel
         assert "panel-selected" in tool_panel
         assert ".panel-selected" in app_css
+
+    def test_workbench_user_errors_are_reported_as_toasts(self, repo_root):
+        canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
+            encoding="utf-8"
+        )
+        thumb_panel = (repo_root / "src/components/ThumbPanel.tsx").read_text(
+            encoding="utf-8"
+        )
+        app_css = (repo_root / "src/App.css").read_text(encoding="utf-8")
+        dialog_tsx = (repo_root / "src/components/AddPanelDialog.tsx").read_text(
+            encoding="utf-8"
+        )
+        en_locale = (repo_root / "src/lib/locales/en.json").read_text(
+            encoding="utf-8"
+        )
+        zh_locale = (repo_root / "src/lib/locales/zh.json").read_text(
+            encoding="utf-8"
+        )
+
+        assert "interface WorkbenchNotice" in canvas_tsx
+        assert "const [notices, setNotices]" in canvas_tsx
+        assert "const showNotice" in canvas_tsx
+        assert "NOTICE_TIMEOUT_MS" in canvas_tsx
+        assert 'class="toast-stack"' in canvas_tsx
+        assert "toast-${notice.type}" in canvas_tsx
+        assert "app.toast.addThumbnailFailed" in canvas_tsx
+        assert "app.toast.captureFailed" in canvas_tsx
+        assert "app.toast.enumerateWindowsFailed" in canvas_tsx
+        assert "app.toast.focusFailed" in canvas_tsx
+        assert "app.toast.layoutSaved" in canvas_tsx
+        assert "app.toast.loadLayoutFailed" in canvas_tsx
+        assert "app.toast.removePanelFailed" in canvas_tsx
+        assert "app.toast.sourceClosed" in canvas_tsx
+        assert "app.toast.stalePanelSkipped" in canvas_tsx
+        assert "onError={(error) =>" in canvas_tsx
+        assert "focusSource" not in thumb_panel
+        assert "props.onError?.(error)" in dialog_tsx
+        assert "onFocus: (id: string) => void" in thumb_panel
+        assert "props.onFocus(props.panel.id)" in thumb_panel
+        assert ".toast-stack" in app_css
+        assert ".toast-error" in app_css
+        assert ".toast-success" in app_css
+        assert ".toast-info" in app_css
+        assert "app.toast.addThumbnailFailed" in en_locale
+        assert "app.toast.addThumbnailFailed" in zh_locale
+        assert "app.toast.enumerateWindowsFailed" in en_locale
+        assert "app.toast.enumerateWindowsFailed" in zh_locale
 
 
 class TestWorkbenchPersistenceShape:

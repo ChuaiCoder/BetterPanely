@@ -8,6 +8,7 @@ interface AddPanelDialogProps {
   onClose: () => void;
   onAddThumbnails: (windows: WindowInfo[]) => void;
   onAddTool: (toolId: string) => void;
+  onError?: (error: unknown) => void;
 }
 
 const TOOLS: ToolDefinition[] = [
@@ -29,7 +30,12 @@ export function AddPanelDialog(props: AddPanelDialogProps) {
 
   createEffect(() => {
     if (props.isOpen) {
-      enumerateWindows().then(setWindows).catch(console.error);
+      enumerateWindows()
+        .then(setWindows)
+        .catch((error) => {
+          console.error("Failed to enumerate windows:", error);
+          props.onError?.(error);
+        });
       setSelectedHwnds(new Set<number>());
       setSearchQuery("");
     }
