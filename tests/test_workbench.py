@@ -277,14 +277,23 @@ class TestWorkbenchRuntimeShape:
         assert "EVENT_SYSTEM_MOVESIZEEND_ID" in drag_monitor
         assert "WINEVENT_SKIPOWNPROCESS" in drag_monitor
         assert "DragEnteredWorkbenchPayload" in drag_monitor
+        assert "DragPositionPayload" in drag_monitor
         assert '"drag:entered-workbench"' in drag_monitor
+        assert '"drag:moved-workbench"' in drag_monitor
+        assert '"drag:ended-workbench"' in drag_monitor
         assert "cursor_position_in_workbench" in drag_monitor
         assert "payload_for_source" in drag_monitor
         assert "window.is_compatible" in drag_monitor
         assert "listen<DragEnteredWorkbenchPayload>" in canvas_tsx
+        assert "listen<DragPositionPayload>" in canvas_tsx
         assert '"drag:entered-workbench"' in canvas_tsx
+        assert '"drag:moved-workbench"' in canvas_tsx
+        assert '"drag:ended-workbench"' in canvas_tsx
         assert "workbenchClientPositionToCanvas" in canvas_tsx
-        assert "addThumbnailPanel(event.payload.sourceHwnd" in canvas_tsx
+        assert "addThumbnailPanel(" in canvas_tsx
+        assert "event.payload.sourceHwnd" in canvas_tsx
+        assert "draggedExternalPanelId" in canvas_tsx
+        assert "movePanelToPosition" in canvas_tsx
         assert "initialPosition?: PanelInitialPosition" in canvas_tsx
 
 

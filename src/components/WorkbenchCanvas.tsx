@@ -44,6 +44,12 @@ interface DragEnteredWorkbenchPayload {
   y: number;
 }
 
+interface DragPositionPayload {
+  sourceHwnd: number;
+  x: number;
+  y: number;
+}
+
 interface PanelInitialPosition {
   x: number;
   y: number;
@@ -65,6 +71,7 @@ export function WorkbenchCanvas() {
   const [selectedPanelId, setSelectedPanelId] = createSignal<string | null>(null);
   const [notices, setNotices] = createSignal<WorkbenchNotice[]>([]);
   const [contextMenu, setContextMenu] = createSignal<CanvasContextMenu | null>(null);
+  const [draggedExternalPanelId, setDraggedExternalPanelId] = createSignal<string | null>(null);
 
   let canvasRef!: HTMLDivElement;
   let saveTimer: number | undefined;
@@ -109,6 +116,9 @@ export function WorkbenchCanvas() {
 
     if (selectedPanelId() === panel.id) {
       setSelectedPanelId(null);
+    }
+    if (draggedExternalPanelId() === panel.id) {
+      setDraggedExternalPanelId(null);
     }
     setPanels((prev) => prev.filter((p) => p.id !== panel.id));
     showNotice(t("app.toast.sourceClosed", { title: panel.title }), "info");
@@ -160,13 +170,25 @@ export function WorkbenchCanvas() {
   };
 
   const workbenchClientPositionToCanvas = (
-    payload: DragEnteredWorkbenchPayload
+    payload: DragEnteredWorkbenchPayload | DragPositionPayload
   ): PanelInitialPosition => {
     const canvasRect = canvasRef.getBoundingClientRect();
     return {
       x: payload.x - canvasRect.left,
       y: payload.y - canvasRect.top,
     };
+  };
+
+  const movePanelToPosition = (panelId: string, initialPosition: PanelInitialPosition) => {
+    const panel = panels().find((p) => p.id === panelId);
+    if (!panel) return;
+
+    const position = getPanelInitialPosition(panel.width, panel.height, initialPosition);
+    const movedPanel = { ...panel, x: position.x, y: position.y };
+    setPanels((prev) => prev.map((p) => (p.id === panelId ? movedPanel : p)));
+    if (movedPanel.type === "thumbnail") {
+      void syncThumbnailRect(movedPanel).catch(console.error);
+    }
   };
 
   createEffect(() => {
@@ -186,7 +208,7 @@ export function WorkbenchCanvas() {
     hwnd: number,
     title: string,
     initialPosition?: PanelInitialPosition
-  ) => {
+  ): Promise<PanelState | null> => {
     try {
       const panelId = await addThumbnail(hwnd);
       const width = 200;
@@ -206,9 +228,11 @@ export function WorkbenchCanvas() {
       };
       setPanels((prev) => [...prev, newPanel]);
       await syncThumbnailRect(newPanel);
+      return newPanel;
     } catch (e) {
       console.error("Failed to add thumbnail:", e);
       showNotice(t("app.toast.addThumbnailFailed", { reason: errorMessage(e) }));
+      return null;
     }
   };
 
@@ -268,6 +292,7 @@ export function WorkbenchCanvas() {
   const handleDragStart = (panelId: string, offsetX: number, offsetY: number) => {
     handleSelectPanel(panelId);
     setContextMenu(null);
+    setDraggedExternalPanelId(null);
     setDraggingId(panelId);
     setDragOffset({ x: offsetX, y: offsetY });
     handleTop(panelId);
@@ -534,7 +559,37 @@ export function WorkbenchCanvas() {
         "drag:entered-workbench",
         async (event) => {
           const position = workbenchClientPositionToCanvas(event.payload);
-          await addThumbnailPanel(event.payload.sourceHwnd, event.payload.title, position);
+          const panel = await addThumbnailPanel(
+            event.payload.sourceHwnd,
+            event.payload.title,
+            position
+          );
+          if (panel) {
+            setDraggedExternalPanelId(panel.id);
+          }
+        }
+      );
+      const unlistenDragMoved = await listen<DragPositionPayload>(
+        "drag:moved-workbench",
+        (event) => {
+          const panelId = draggedExternalPanelId();
+          if (!panelId) return;
+          const panel = panels().find((p) => p.id === panelId);
+          if (panel?.sourceHwnd !== event.payload.sourceHwnd) return;
+
+          movePanelToPosition(panelId, workbenchClientPositionToCanvas(event.payload));
+        }
+      );
+      const unlistenDragEnded = await listen<DragPositionPayload>(
+        "drag:ended-workbench",
+        (event) => {
+          const panelId = draggedExternalPanelId();
+          if (!panelId) return;
+          const panel = panels().find((p) => p.id === panelId);
+          if (panel?.sourceHwnd === event.payload.sourceHwnd) {
+            movePanelToPosition(panelId, workbenchClientPositionToCanvas(event.payload));
+          }
+          setDraggedExternalPanelId(null);
         }
       );
 
@@ -543,6 +598,8 @@ export function WorkbenchCanvas() {
       addCleanup(unlistenCaptureHotkey);
       addCleanup(unlistenSourceClosed);
       addCleanup(unlistenDragEntered);
+      addCleanup(unlistenDragMoved);
+      addCleanup(unlistenDragEnded);
     })();
 
     const thumbnailHealthTimer = window.setInterval(

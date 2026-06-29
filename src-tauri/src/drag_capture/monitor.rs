@@ -33,7 +33,16 @@ pub struct DragEnteredWorkbenchPayload {
     pub y: i32,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DragPositionPayload {
+    pub source_hwnd: isize,
+    pub x: i32,
+    pub y: i32,
+}
+
 struct DragCaptureMonitor {
+    app: AppHandle,
     state: Arc<Mutex<DragCaptureState>>,
     _hook: isize,
 }
@@ -74,6 +83,7 @@ pub fn install_drag_capture_monitor(app: AppHandle) -> Result<(), Box<dyn std::e
 
     let state = Arc::new(Mutex::new(DragCaptureState::default()));
     let monitor = DragCaptureMonitor {
+        app: app.clone(),
         state: state.clone(),
         _hook: hook.0 as isize,
     };
@@ -88,7 +98,7 @@ fn poll_dragged_window_entry(app: AppHandle, state: Arc<Mutex<DragCaptureState>>
     loop {
         thread::sleep(Duration::from_millis(DRAG_POLL_INTERVAL_MS));
 
-        let Some(source_hwnd) = active_unemitted_source(&state) else {
+        let Some((source_hwnd, already_emitted)) = active_source(&state) else {
             continue;
         };
 
@@ -101,25 +111,33 @@ fn poll_dragged_window_entry(app: AppHandle, state: Arc<Mutex<DragCaptureState>>
             continue;
         };
 
+        if already_emitted {
+            emit_drag_position(
+                &app,
+                "drag:moved-workbench",
+                source_hwnd,
+                client_x,
+                client_y,
+            );
+            continue;
+        }
+
         let Some(payload) = payload_for_source(source_hwnd, client_x, client_y) else {
             mark_active_source_emitted(&state, source_hwnd);
             continue;
         };
 
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.emit("drag:entered-workbench", payload);
+        if emit_drag_entered(&app, payload) {
+            mark_active_source_emitted(&state, source_hwnd);
         }
-        mark_active_source_emitted(&state, source_hwnd);
     }
 }
 
-fn active_unemitted_source(state: &Arc<Mutex<DragCaptureState>>) -> Option<isize> {
+fn active_source(state: &Arc<Mutex<DragCaptureState>>) -> Option<(isize, bool)> {
     state.lock().ok().and_then(|state| {
-        if state.emitted_for_active_source {
-            None
-        } else {
-            state.active_source_hwnd
-        }
+        state
+            .active_source_hwnd
+            .map(|hwnd| (hwnd, state.emitted_for_active_source))
     })
 }
 
@@ -193,11 +211,7 @@ fn workbench_client_rect(app: &AppHandle) -> Option<WorkbenchClientRect> {
     }
 }
 
-fn payload_for_source(
-    source_hwnd: isize,
-    x: i32,
-    y: i32,
-) -> Option<DragEnteredWorkbenchPayload> {
+fn payload_for_source(source_hwnd: isize, x: i32, y: i32) -> Option<DragEnteredWorkbenchPayload> {
     let window = crate::window_embedder::enumerator::enumerate_windows()
         .ok()?
         .into_iter()
@@ -213,6 +227,31 @@ fn payload_for_source(
         x,
         y,
     })
+}
+
+fn emit_drag_entered(app: &AppHandle, payload: DragEnteredWorkbenchPayload) -> bool {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.emit("drag:entered-workbench", payload);
+        true
+    } else {
+        false
+    }
+}
+
+fn emit_drag_position(
+    app: &AppHandle,
+    event_name: &str,
+    source_hwnd: isize,
+    x: i32,
+    y: i32,
+) -> bool {
+    if let Some(window) = app.get_webview_window("main") {
+        let payload = DragPositionPayload { source_hwnd, x, y };
+        let _ = window.emit(event_name, payload);
+        true
+    } else {
+        false
+    }
 }
 
 unsafe extern "system" fn move_size_callback(
@@ -239,6 +278,18 @@ unsafe extern "system" fn move_size_callback(
             state.emitted_for_active_source = false;
         }
     } else if event == EVENT_SYSTEM_MOVESIZEEND_ID {
+        if let Some((x, y)) = cursor_position_in_workbench(&monitor.app) {
+            let should_emit = monitor
+                .state
+                .lock()
+                .map(|state| {
+                    state.active_source_hwnd == Some(source_hwnd) && state.emitted_for_active_source
+                })
+                .unwrap_or(false);
+            if should_emit {
+                emit_drag_position(&monitor.app, "drag:ended-workbench", source_hwnd, x, y);
+            }
+        }
         clear_active_source(&monitor.state, source_hwnd);
     }
 }
