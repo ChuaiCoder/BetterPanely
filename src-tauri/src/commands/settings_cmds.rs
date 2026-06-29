@@ -18,21 +18,27 @@ pub async fn set_settings(
 ) -> Result<AppSettings, String> {
     let settings = settings.normalized();
 
-    apply_launch_on_startup(settings.launch_on_startup)?;
-
     let old_settings = {
         let state_mgr = state.state_manager.lock().map_err(|e| e.to_string())?;
         state_mgr.get_settings().clone()
     };
+    let startup_changed = old_settings.launch_on_startup != settings.launch_on_startup;
     let hotkey_changed = old_settings.capture_hotkey != settings.capture_hotkey;
+
+    if startup_changed {
+        apply_launch_on_startup(settings.launch_on_startup)?;
+    }
 
     #[cfg(target_os = "windows")]
     if hotkey_changed {
-        crate::hotkeys::replace_capture_hotkey(
+        if let Err(error) = crate::hotkeys::replace_capture_hotkey(
             &app_handle,
             &old_settings.capture_hotkey,
             &settings.capture_hotkey,
-        )?;
+        ) {
+            rollback_launch_on_startup(&old_settings, startup_changed);
+            return Err(error);
+        }
     }
 
     let save_result = {
@@ -55,6 +61,7 @@ pub async fn set_settings(
                     &old_settings.capture_hotkey,
                 );
             }
+            rollback_launch_on_startup(&old_settings, startup_changed);
             if let Ok(mut state_mgr) = state.state_manager.lock() {
                 state_mgr.set_settings(old_settings);
             }
@@ -210,4 +217,14 @@ fn apply_launch_on_startup(enabled: bool) -> Result<(), String> {
 #[cfg(not(target_os = "windows"))]
 fn apply_launch_on_startup(_enabled: bool) -> Result<(), String> {
     Ok(())
+}
+
+fn rollback_launch_on_startup(old_settings: &AppSettings, startup_changed: bool) {
+    if !startup_changed {
+        return;
+    }
+
+    if let Err(error) = apply_launch_on_startup(old_settings.launch_on_startup) {
+        log::warn!("Failed to roll back launch-on-startup setting: {}", error);
+    }
 }

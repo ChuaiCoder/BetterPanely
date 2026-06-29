@@ -444,7 +444,13 @@ class TestWorkbenchPersistenceShape:
         assert "s.captureHotkey" in settings_html
         assert "set_settings" in settings_cmds
         assert "settings.normalized()" in settings_cmds
+        assert (
+            "let startup_changed = old_settings.launch_on_startup != settings.launch_on_startup"
+            in settings_cmds
+        )
         assert "apply_launch_on_startup(settings.launch_on_startup)" in settings_cmds
+        assert "rollback_launch_on_startup(&old_settings, startup_changed)" in settings_cmds
+        assert "apply_launch_on_startup(old_settings.launch_on_startup)" in settings_cmds
         assert '"settings-changed"' in settings_cmds
         assert "RegSetValueExW" in settings_cmds
         assert "RegDeleteValueW" in settings_cmds
