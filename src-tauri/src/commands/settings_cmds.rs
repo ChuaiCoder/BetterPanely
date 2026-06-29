@@ -20,13 +20,46 @@ pub async fn set_settings(
 
     apply_launch_on_startup(settings.launch_on_startup)?;
 
-    let (saved_settings, language_changed) = {
+    let old_settings = {
+        let state_mgr = state.state_manager.lock().map_err(|e| e.to_string())?;
+        state_mgr.get_settings().clone()
+    };
+    let hotkey_changed = old_settings.capture_hotkey != settings.capture_hotkey;
+
+    #[cfg(target_os = "windows")]
+    if hotkey_changed {
+        crate::hotkeys::replace_capture_hotkey(
+            &app_handle,
+            &old_settings.capture_hotkey,
+            &settings.capture_hotkey,
+        )?;
+    }
+
+    let save_result = {
         let mut state_mgr = state.state_manager.lock().map_err(|e| e.to_string())?;
-        let old_language = state_mgr.get_language();
-        let saved_settings = state_mgr.set_settings(settings);
-        state_mgr.save_settings().map_err(|e| e.to_string())?;
-        let language_changed = old_language != saved_settings.language;
-        (saved_settings, language_changed)
+        let saved_settings = state_mgr.set_settings(settings.clone());
+        state_mgr.save_settings().map(|_| {
+            let language_changed = old_settings.language != saved_settings.language;
+            (saved_settings, language_changed)
+        })
+    };
+
+    let (saved_settings, language_changed) = match save_result {
+        Ok(result) => result,
+        Err(error) => {
+            #[cfg(target_os = "windows")]
+            if hotkey_changed {
+                let _ = crate::hotkeys::replace_capture_hotkey(
+                    &app_handle,
+                    &settings.capture_hotkey,
+                    &old_settings.capture_hotkey,
+                );
+            }
+            if let Ok(mut state_mgr) = state.state_manager.lock() {
+                state_mgr.set_settings(old_settings);
+            }
+            return Err(error.to_string());
+        }
     };
 
     if language_changed {

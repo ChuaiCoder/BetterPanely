@@ -378,6 +378,9 @@ class TestWorkbenchPersistenceShape:
             repo_root / "src-tauri/src/commands/settings_cmds.rs"
         ).read_text(encoding="utf-8")
         lib_rs = (repo_root / "src-tauri/src/lib.rs").read_text(encoding="utf-8")
+        hotkeys_rs = (repo_root / "src-tauri/src/hotkeys.rs").read_text(
+            encoding="utf-8"
+        )
         main_tsx = (repo_root / "src/main.tsx").read_text(encoding="utf-8")
         settings_api = (repo_root / "src/lib/settings-api.ts").read_text(
             encoding="utf-8"
@@ -404,6 +407,12 @@ class TestWorkbenchPersistenceShape:
         assert '"settings-changed"' in settings_cmds
         assert "RegSetValueExW" in settings_cmds
         assert "RegDeleteValueW" in settings_cmds
+        assert "replace_capture_hotkey" in settings_cmds
+        assert "register_capture_hotkey(app.handle(), &capture_hotkey)" in lib_rs
+        assert "ShortcutState::Pressed" in hotkeys_rs
+        assert ".unregister(old_hotkey)" in hotkeys_rs
+        assert "register_capture_hotkey(app_handle, new_hotkey)" in hotkeys_rs
+        assert "register_capture_hotkey(app_handle, old_hotkey)" in hotkeys_rs
         assert "WindowEvent::CloseRequested" in lib_rs
         assert "minimize_to_tray" in lib_rs
         assert "window.hide()" in lib_rs
@@ -422,3 +431,5 @@ class TestWorkbenchPersistenceShape:
         assert "launchOnStartup:" in settings_html
         assert "minimizeToTray:" in settings_html
         assert "captureHotkey:" in settings_html
+        assert 'id="hotkeyInput"' in settings_html
+        assert 'document.getElementById("hotkeyInput").value' in settings_html

@@ -63,12 +63,13 @@
       }
       .row label { font-size: 14px; }
       .row .hint { font-size: 11px; color: var(--text-subtle); margin-top: 2px; }
-      select, button {
+      select, input, button {
         padding: 6px 12px; font-size: 13px; background: var(--field-bg);
         border: 1px solid var(--border); border-radius: 6px; color: var(--text);
         font-family: inherit; cursor: pointer;
       }
-      select:focus { outline: none; border-color: var(--accent); }
+      input { cursor: text; width: 132px; font-family: "Cascadia Mono", Consolas, monospace; color: var(--accent); }
+      select:focus, input:focus { outline: none; border-color: var(--accent); }
       button { background: var(--accent); border-color: var(--accent); color: white; }
       button:hover { background: var(--accent-hover); }
       button.danger { background: var(--danger); border-color: var(--danger); }
@@ -148,7 +149,7 @@
             <label id="lblHotkey">Capture Hotkey</label>
             <div class="hint" id="hintHotkey">Keyboard shortcut to capture a window</div>
           </div>
-          <span style="font-family:monospace;font-size:13px;color:var(--accent);" id="hotkeyDisplay">Ctrl+Shift+W</span>
+          <input id="hotkeyInput" value="Ctrl+Shift+W" autocomplete="off" spellcheck="false">
         </div>
       </div>
 
@@ -257,7 +258,7 @@
         document.getElementById("themeSelect").value = settings.theme;
         document.getElementById("launchStartup").checked = settings.launchOnStartup;
         document.getElementById("minimizeTray").checked = settings.minimizeToTray;
-        document.getElementById("hotkeyDisplay").textContent = settings.captureHotkey;
+        document.getElementById("hotkeyInput").value = settings.captureHotkey;
         applyLang();
         applyTheme(settings.theme);
       }
@@ -280,7 +281,7 @@
           theme: document.getElementById("themeSelect").value,
           launchOnStartup: document.getElementById("launchStartup").checked,
           minimizeToTray: document.getElementById("minimizeTray").checked,
-          captureHotkey: currentSettings.captureHotkey || document.getElementById("hotkeyDisplay").textContent
+          captureHotkey: document.getElementById("hotkeyInput").value
         };
 
         if (window.__TAURI__) {

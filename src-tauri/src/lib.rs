@@ -1,6 +1,7 @@
 mod window_embedder;
 mod drag_capture;
 mod commands;
+mod hotkeys;
 mod locales;
 mod state;
 mod tray;
@@ -9,7 +10,7 @@ mod thumbnail;
 use state::AppStateManager;
 use thumbnail::SharedThumbnailManager;
 use std::sync::Mutex;
-use tauri::{Emitter, Manager, WindowEvent};
+use tauri::{Manager, WindowEvent};
 
 /// Application state shared across all handlers
 pub struct AppState {
@@ -63,23 +64,12 @@ pub fn run() {
             // Initialize system tray with loaded language
             tray::create_tray(app.handle(), &current_lang)?;
 
-            // Register global hotkey for window capture (Ctrl+Shift+W)
-            // Emits event to main window; frontend calls the sync capture command on main thread
+            // Register global hotkey for window capture.
             #[cfg(target_os = "windows")]
             {
-                use tauri_plugin_global_shortcut::GlobalShortcutExt;
-                let app_handle = app.handle().clone();
-                let registered_hotkey = capture_hotkey.clone();
-                match app.global_shortcut().on_shortcut(
-                    capture_hotkey.as_str(),
-                    move |_app, _shortcut, _event| {
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            let _ = window.emit("tray:capture-hotkey", ());
-                        }
-                    },
-                ) {
-                    Ok(_) => log::info!("Global shortcut {} registered", registered_hotkey),
-                    Err(e) => log::error!("Failed to register {}: {}", registered_hotkey, e),
+                match hotkeys::register_capture_hotkey(app.handle(), &capture_hotkey) {
+                    Ok(()) => log::info!("Global shortcut {} registered", capture_hotkey),
+                    Err(e) => log::error!("Failed to register {}: {}", capture_hotkey, e),
                 }
             }
 
