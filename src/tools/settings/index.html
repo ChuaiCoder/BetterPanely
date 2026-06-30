@@ -190,7 +190,8 @@
           hintStartup: "Start BetterPanely when Windows starts",
           minimizeTray: "Minimize to Tray", hintMinimize: "Hide to system tray instead of closing",
           captureHotkey: "Capture Hotkey", hintHotkey: "Keyboard shortcut to capture a window",
-          save: "Save Settings", saved: "Settings saved", error: "Error saving settings"
+          save: "Save Settings", saved: "Settings saved", error: "Error saving settings",
+          loadError: "Error loading settings"
         },
         zh: {
           title: "设置", language: "语言", langSelect: "显示语言",
@@ -199,7 +200,8 @@
           hintStartup: "Windows 启动时自动运行 BetterPanely",
           minimizeTray: "最小化到托盘", hintMinimize: "关闭时隐藏到系统托盘而不是退出",
           captureHotkey: "捕获热键", hintHotkey: "捕获窗口的键盘快捷键",
-          save: "保存设置", saved: "设置已保存", error: "保存设置失败"
+          save: "保存设置", saved: "设置已保存", error: "保存设置失败",
+          loadError: "加载设置失败"
         }
       };
       function getLang() {
@@ -251,6 +253,10 @@
         statusBar.className = isError ? "status error" : "status";
       }
 
+      function errorMessage(error) {
+        return error && error.message ? error.message : String(error);
+      }
+
       function applySettings(settings) {
         currentSettings = settings;
         location.hash = "lang=" + settings.language;
@@ -270,6 +276,7 @@
             applySettings(s);
           }).catch(function(e) {
             console.error("Failed to load settings:", e);
+            setStatus(t("loadError") + ": " + errorMessage(e), true);
           });
         }
       }
@@ -290,7 +297,7 @@
             setStatus(t("saved"), false);
             setTimeout(function() { setStatus("", false); }, 2000);
           }).catch(function(e) {
-            setStatus(t("error") + ": " + e, true);
+            setStatus(t("error") + ": " + errorMessage(e), true);
           });
         }
       });

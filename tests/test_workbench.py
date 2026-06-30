@@ -783,6 +783,26 @@ class TestWorkbenchPersistenceShape:
         assert "capture_hotkey: default_capture_hotkey()" in state_rs
         assert "language: default_language()" in state_rs
 
+    def test_settings_page_reports_load_failures_to_status_bar(self, repo_root):
+        settings_html = (repo_root / "src/tools/settings/index.html").read_text(
+            encoding="utf-8"
+        )
+        load_block = settings_html.split(
+            "function loadSettings()", 1
+        )[1].split("//", 1)[0]
+        save_block = settings_html.split(
+            'tauriInvoke("set_settings"', 1
+        )[1].split("});", 1)[0]
+
+        assert 'loadError: "Error loading settings"' in settings_html
+        assert 'loadError: "加载设置失败"' in settings_html
+        assert "function errorMessage(error)" in settings_html
+        assert "error && error.message ? error.message : String(error)" in settings_html
+        assert 'console.error("Failed to load settings:", e)' in load_block
+        assert 'setStatus(t("loadError") + ": " + errorMessage(e), true)' in load_block
+        assert 'setStatus(t("error") + ": " + errorMessage(e), true)' in save_block
+        assert 'setStatus(t("error") + ": " + e, true)' not in settings_html
+
     def test_settings_window_has_capability_and_camel_case_contract(self, repo_root):
         capabilities = (
             repo_root / "src-tauri/capabilities/default.json"
