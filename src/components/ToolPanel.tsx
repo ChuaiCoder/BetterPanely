@@ -1,6 +1,13 @@
-import { createSignal, Show } from "solid-js";
+import { createMemo, createSignal, Show } from "solid-js";
 import { useI18n } from "../lib/i18n";
 import type { PanelState } from "../lib/types";
+
+const TOOL_URLS: Record<string, string> = {
+  calculator: "src/tools/calculator/index.html",
+  notes: "src/tools/notes/index.html",
+  timer: "src/tools/timer/index.html",
+  weather: "src/tools/weather/index.html",
+};
 
 interface ToolPanelProps {
   panel: PanelState;
@@ -21,16 +28,13 @@ export function ToolPanel(props: ToolPanelProps) {
   const { t, lang } = useI18n();
   const [isHovered, setIsHovered] = createSignal(false);
 
-  const toolUrls: Record<string, string> = {
-    calculator: "src/tools/calculator/index.html",
-    notes: "src/tools/notes/index.html",
-    timer: "src/tools/timer/index.html",
-    weather: "src/tools/weather/index.html",
-  };
+  const iframeUrl = createMemo(() => {
+    const toolId = props.panel.toolId;
+    if (!toolId) return "";
 
-  const iframeUrl = props.panel.toolId
-    ? `${toolUrls[props.panel.toolId] || ""}#lang=${lang()}`
-    : "";
+    const url = TOOL_URLS[toolId];
+    return url ? `${url}#lang=${lang()}` : "";
+  });
 
   const handleMouseDown = (e: MouseEvent) => {
     if (
@@ -100,9 +104,9 @@ export function ToolPanel(props: ToolPanelProps) {
         </div>
       </div>
       <div class="panel-content">
-        <Show when={iframeUrl}>
+        <Show when={iframeUrl()}>
           <iframe
-            src={iframeUrl}
+            src={iframeUrl()}
             class="panel-iframe"
             title={props.panel.title}
             sandbox="allow-same-origin allow-scripts allow-forms"

@@ -202,6 +202,12 @@ class TestWorkbenchRuntimeShape:
         assert "onFocus: (id: string) => void" in tool_panel
         assert 'closest(".panel-focus")' in tool_panel
         assert "props.onFocus(props.panel.id)" in tool_panel
+        assert "createMemo" in tool_panel
+        assert "const iframeUrl = createMemo" in tool_panel
+        assert "TOOL_URLS[toolId]" in tool_panel
+        assert "return url ? `${url}#lang=${lang()}` : \"\";" in tool_panel
+        assert "<Show when={iframeUrl()}>" in tool_panel
+        assert "src={iframeUrl()}" in tool_panel
         assert 'class="panel-btn panel-focus"' in tool_panel
         assert 't("app.openToolWindow")' in tool_panel
         assert "app.openToolWindow" in en_locale
