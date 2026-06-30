@@ -85,6 +85,38 @@ class TestWorkbenchRuntimeShape:
         assert "WindowFromPoint" not in hotkey_rs
         assert "get_window_under_cursor" not in hotkey_rs
 
+    def test_runtime_state_locks_return_errors_instead_of_panicking(self, repo_root):
+        lib_rs = (repo_root / "src-tauri/src/lib.rs").read_text(encoding="utf-8")
+        tray_rs = (repo_root / "src-tauri/src/tray.rs").read_text(encoding="utf-8")
+        manager_rs = (repo_root / "src-tauri/src/thumbnail/manager.rs").read_text(
+            encoding="utf-8"
+        )
+        workbench_cmds = (
+            repo_root / "src-tauri/src/commands/workbench_cmds.rs"
+        ).read_text(encoding="utf-8")
+        compact_manager = "".join(manager_rs.split())
+        compact_workbench_cmds = "".join(workbench_cmds.split())
+
+        for source in (lib_rs, tray_rs, manager_rs):
+            assert "lock().unwrap()" not in source
+
+        assert "fn lock_manager(" in manager_rs
+        assert "Thumbnail manager lock is poisoned" in manager_rs
+        assert "self.lock_manager()?.register" in compact_manager
+        assert "self.lock_manager()?.update_rect" in compact_manager
+        assert "self.lock_manager()?.unregister_by_panel_id" in compact_manager
+        assert "pub fn next_panel_id(&self) -> Result<String" in manager_rs
+        assert "Ok(self.lock_manager()?.next_panel_id())" in manager_rs
+        assert "Failed to unregister thumbnails" in manager_rs
+        assert "Failed to unregister closed thumbnail source" in manager_rs
+        assert ".next_panel_id()" in compact_workbench_cmds
+        assert ".map_err(|e|e.to_string())?" in compact_workbench_cmds
+        assert "Failed to lock application state during startup" in lib_rs
+        assert "Application state lock is poisoned" in lib_rs
+        assert "Failed to lock application state while closing" in lib_rs
+        assert "unwrap_or_else(|error|" in lib_rs
+        assert "Failed to lock application state from tray" in tray_rs
+
     def test_thumbnail_source_lifetime_is_checked(self, repo_root):
         manager_rs = (repo_root / "src-tauri/src/thumbnail/manager.rs").read_text(
             encoding="utf-8"

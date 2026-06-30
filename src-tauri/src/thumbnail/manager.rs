@@ -1,7 +1,7 @@
 use super::dwm::*;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 use tauri::{AppHandle, Emitter, Manager};
 use windows::Win32::Foundation::RECT;
 use windows::Win32::Graphics::Dwm::DWM_THUMBNAIL_PROPERTIES;
@@ -78,7 +78,12 @@ impl ThumbnailManager {
         let handle = ThumbnailHandle {
             source_hwnd,
             thumbnail_id,
-            dest_rect: RECT { left: 0, top: 0, right: 100, bottom: 100 },
+            dest_rect: RECT {
+                left: 0,
+                top: 0,
+                right: 100,
+                bottom: 100,
+            },
             visible: true,
             opacity: 1.0,
         };
@@ -139,7 +144,10 @@ impl ThumbnailManager {
             return Err("Thumbnail source window is no longer available".into());
         }
 
-        let handle = self.thumbnails.get_mut(panel_id).ok_or("Thumbnail not found")?;
+        let handle = self
+            .thumbnails
+            .get_mut(panel_id)
+            .ok_or("Thumbnail not found")?;
 
         handle.dest_rect = RECT {
             left: x,
@@ -159,7 +167,12 @@ impl ThumbnailManager {
                 | DWM_TNP_VISIBLE
                 | DWM_TNP_SOURCECLIENTAREAONLY,
             rcDestination: handle.dest_rect,
-            rcSource: RECT { left: 0, top: 0, right: 0, bottom: 0 },
+            rcSource: RECT {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
+            },
             opacity: (handle.opacity * 255.0) as u8,
             fVisible: handle.visible.into(),
             fSourceClientAreaOnly: true.into(),
@@ -238,6 +251,12 @@ impl SharedThumbnailManager {
         }
     }
 
+    fn lock_manager(&self) -> Result<MutexGuard<'_, ThumbnailManager>, Box<dyn std::error::Error>> {
+        self.inner
+            .lock()
+            .map_err(|_| "Thumbnail manager lock is poisoned".into())
+    }
+
     pub fn register(
         &self,
         dest_hwnd: isize,
@@ -245,7 +264,8 @@ impl SharedThumbnailManager {
         panel_id: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         unsafe {
-            self.inner.lock().unwrap().register(dest_hwnd, source_hwnd, panel_id)
+            self.lock_manager()?
+                .register(dest_hwnd, source_hwnd, panel_id)
         }
     }
 
@@ -258,24 +278,28 @@ impl SharedThumbnailManager {
         height: i32,
     ) -> Result<(), Box<dyn std::error::Error>> {
         unsafe {
-            self.inner.lock().unwrap().update_rect(panel_id, x, y, width, height)
+            self.lock_manager()?
+                .update_rect(panel_id, x, y, width, height)
         }
     }
 
     pub fn unregister(&self, panel_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        unsafe {
-            self.inner.lock().unwrap().unregister_by_panel_id(panel_id)
-        }
+        unsafe { self.lock_manager()?.unregister_by_panel_id(panel_id) }
     }
 
     pub fn unregister_all(&self) {
-        unsafe {
-            self.inner.lock().unwrap().unregister_all()
+        match self.lock_manager() {
+            Ok(mut manager) => unsafe {
+                manager.unregister_all();
+            },
+            Err(error) => {
+                log::error!("Failed to unregister thumbnails: {}", error);
+            }
         }
     }
 
-    pub fn next_panel_id(&self) -> String {
-        self.inner.lock().unwrap().next_panel_id()
+    pub fn next_panel_id(&self) -> Result<String, Box<dyn std::error::Error>> {
+        Ok(self.lock_manager()?.next_panel_id())
     }
 
     #[cfg(target_os = "windows")]
@@ -285,15 +309,17 @@ impl SharedThumbnailManager {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let _ = SOURCE_LIFECYCLE_APP.set(app);
         let _ = SOURCE_LIFECYCLE_MANAGER.set(self.clone());
-        unsafe {
-            self.inner.lock().unwrap().ensure_source_lifecycle_hook()
-        }
+        unsafe { self.lock_manager()?.ensure_source_lifecycle_hook() }
     }
 
     #[cfg(target_os = "windows")]
     pub fn unregister_closed_source(&self, source_hwnd: isize) -> Vec<SourceClosedPayload> {
-        unsafe {
-            self.inner.lock().unwrap().unregister_by_source_hwnd(source_hwnd)
+        match self.lock_manager() {
+            Ok(mut manager) => unsafe { manager.unregister_by_source_hwnd(source_hwnd) },
+            Err(error) => {
+                log::error!("Failed to unregister closed thumbnail source: {}", error);
+                Vec::new()
+            }
         }
     }
 }

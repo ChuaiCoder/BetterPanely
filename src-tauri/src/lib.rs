@@ -1,16 +1,16 @@
-mod window_embedder;
-mod drag_capture;
 mod commands;
+mod drag_capture;
 mod hotkeys;
 mod locales;
 mod state;
-mod tray;
 mod thumbnail;
+mod tray;
+mod window_embedder;
 
 use state::AppStateManager;
-use thumbnail::SharedThumbnailManager;
 use std::sync::Mutex;
 use tauri::{Manager, WindowEvent};
+use thumbnail::SharedThumbnailManager;
 
 /// Application state shared across all handlers
 pub struct AppState {
@@ -40,7 +40,14 @@ pub fn run() {
 
             // Load saved state (including language setting)
             let state = app.state::<AppState>();
-            let mut state_mgr = state.state_manager.lock().unwrap();
+            let mut state_mgr =
+                state
+                    .state_manager
+                    .lock()
+                    .map_err(|error| -> Box<dyn std::error::Error> {
+                        log::error!("Failed to lock application state during startup: {}", error);
+                        format!("Application state lock is poisoned: {}", error).into()
+                    })?;
             if let Err(e) = state_mgr.load(app.handle()) {
                 log::warn!("Failed to load saved state: {}", e);
             }
@@ -89,7 +96,10 @@ pub fn run() {
                     .state_manager
                     .lock()
                     .map(|state_mgr| state_mgr.get_settings().minimize_to_tray)
-                    .unwrap_or(false);
+                    .unwrap_or_else(|error| {
+                        log::error!("Failed to lock application state while closing: {}", error);
+                        true
+                    });
 
                 if minimize_to_tray {
                     api.prevent_close();

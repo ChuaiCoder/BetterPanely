@@ -141,8 +141,13 @@ fn handle_tray_menu<R: Runtime>(app_handle: &AppHandle<R>, menu_id: &str) {
             // Open settings directly
             let state = app_handle.state::<crate::AppState>();
             let lang = {
-                let mgr = state.state_manager.lock().unwrap();
-                mgr.get_language()
+                match state.state_manager.lock() {
+                    Ok(mgr) => mgr.get_language(),
+                    Err(error) => {
+                        log::error!("Failed to lock application state from tray: {}", error);
+                        return;
+                    }
+                }
             };
             let label = "settings_window";
             let title = crate::commands::settings_cmds::settings_window_title(&lang);

@@ -1,9 +1,9 @@
-use tauri::{State, AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
-use crate::AppState;
+use crate::state::SavedPanel;
 use crate::thumbnail::SharedThumbnailManager;
 use crate::window_embedder::enumerator;
-use crate::state::SavedPanel;
-use serde::{Serialize, Deserialize};
+use crate::AppState;
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 #[derive(Serialize, Deserialize)]
 pub struct WindowInfo {
@@ -162,8 +162,11 @@ pub fn wb_add_thumbnail(
         return Err("Cannot capture the workbench window itself".to_string());
     }
 
-    let panel_id = thumbnail_manager.next_panel_id();
-    thumbnail_manager.register(dest_hwnd, source_hwnd, &panel_id)
+    let panel_id = thumbnail_manager
+        .next_panel_id()
+        .map_err(|e| e.to_string())?;
+    thumbnail_manager
+        .register(dest_hwnd, source_hwnd, &panel_id)
         .map_err(|e| e.to_string())?;
     Ok(panel_id)
 }
@@ -177,13 +180,9 @@ pub fn wb_update_thumbnail_rect(
     height: f64,
     thumbnail_manager: State<'_, SharedThumbnailManager>,
 ) -> Result<(), String> {
-    thumbnail_manager.update_rect(
-        &panel_id,
-        x as i32,
-        y as i32,
-        width as i32,
-        height as i32,
-    ).map_err(|e| e.to_string())
+    thumbnail_manager
+        .update_rect(&panel_id, x as i32, y as i32, width as i32, height as i32)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -191,7 +190,9 @@ pub fn wb_remove_panel(
     panel_id: String,
     thumbnail_manager: State<'_, SharedThumbnailManager>,
 ) -> Result<(), String> {
-    thumbnail_manager.unregister(&panel_id).map_err(|e| e.to_string())
+    thumbnail_manager
+        .unregister(&panel_id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -227,8 +228,8 @@ pub fn wb_open_tool_window(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let config = tool_window_config(&tool_id)
-        .ok_or_else(|| format!("Unknown tool: {}", tool_id))?;
+    let config =
+        tool_window_config(&tool_id).ok_or_else(|| format!("Unknown tool: {}", tool_id))?;
     let lang = state
         .state_manager
         .lock()
@@ -257,10 +258,7 @@ pub fn wb_open_tool_window(
 }
 
 #[tauri::command]
-pub fn wb_save_layout(
-    panels: Vec<SavedPanel>,
-    app: AppHandle,
-) -> Result<(), String> {
+pub fn wb_save_layout(panels: Vec<SavedPanel>, app: AppHandle) -> Result<(), String> {
     crate::state::save_layout(app, &panels).map_err(|e| e.to_string())
 }
 
