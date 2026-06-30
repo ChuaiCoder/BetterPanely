@@ -357,6 +357,24 @@ class TestWorkbenchRuntimeShape:
         assert "panel-selected" in tool_panel
         assert ".panel-selected" in app_css
 
+    def test_tool_panel_close_does_not_depend_on_thumbnail_backend(self, repo_root):
+        canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
+            encoding="utf-8"
+        )
+        close_block = canvas_tsx.split(
+            "const handleClosePanel = async", 1
+        )[1].split("const handleSelectPanel", 1)[0]
+
+        assert "const panel = panels().find((p) => p.id === panelId)" in close_block
+        assert 'if (panel?.type === "thumbnail")' in close_block
+        assert "await removePanel(panelId)" in close_block
+        assert close_block.index('if (panel?.type === "thumbnail")') < close_block.index(
+            "await removePanel(panelId)"
+        )
+        assert close_block.index("await removePanel(panelId)") < close_block.index(
+            "setPanels((prev) => prev.filter((p) => p.id !== panelId))"
+        )
+
     def test_workbench_user_errors_are_reported_as_toasts(self, repo_root):
         canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
             encoding="utf-8"

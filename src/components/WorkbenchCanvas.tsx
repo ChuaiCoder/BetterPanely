@@ -307,8 +307,11 @@ export function WorkbenchCanvas() {
   };
 
   const handleClosePanel = async (panelId: string) => {
+    const panel = panels().find((p) => p.id === panelId);
     try {
-      await removePanel(panelId);
+      if (panel?.type === "thumbnail") {
+        await removePanel(panelId);
+      }
       setPanels((prev) => prev.filter((p) => p.id !== panelId));
       if (selectedPanelId() === panelId) {
         setSelectedPanelId(null);
