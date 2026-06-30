@@ -739,3 +739,16 @@ class TestWorkbenchPersistenceShape:
         assert "captureHotkey:" in settings_html
         assert 'id="hotkeyInput"' in settings_html
         assert 'document.getElementById("hotkeyInput").value' in settings_html
+
+    def test_i18n_event_listeners_handle_failures_without_dynamic_import(self, repo_root):
+        i18n_tsx = (repo_root / "src/lib/i18n.tsx").read_text(encoding="utf-8")
+
+        assert 'import { listen } from "@tauri-apps/api/event";' in i18n_tsx
+        assert 'import("@tauri-apps/api/event")' not in i18n_tsx
+        assert "function isLang(value: string): value is Lang" in i18n_tsx
+        assert "if (isLang(newLang))" in i18n_tsx
+        assert 'console.error("Failed to listen for language changes:", error)' in i18n_tsx
+        assert 'listen<string>("tray:set-language", (event) =>' in i18n_tsx
+        assert "void setLang(newLang).catch((error) =>" in i18n_tsx
+        assert 'console.error("Failed to set language from tray:", error)' in i18n_tsx
+        assert 'console.error("Failed to listen for tray language changes:", error)' in i18n_tsx

@@ -1,5 +1,6 @@
 import { createSignal, createContext, useContext } from "solid-js";
 import type { JSX } from "solid-js";
+import { listen } from "@tauri-apps/api/event";
 import { setLanguage as setLangBackend, onLanguageChanged } from "./settings-api";
 import enLocale from "./locales/en.json";
 import zhLocale from "./locales/zh.json";
@@ -20,6 +21,10 @@ export interface I18nContextValue {
 }
 
 const I18nContext = createContext<I18nContextValue>();
+
+function isLang(value: string): value is Lang {
+  return value === "en" || value === "zh";
+}
 
 /**
  * Create the i18n instance. Must be called once at app startup.
@@ -44,18 +49,22 @@ export function createI18n(initialLang: Lang) {
   }
 
   onLanguageChanged((newLang: string) => {
-    if (newLang === "en" || newLang === "zh") {
-      setLangSignal(newLang as Lang);
+    if (isLang(newLang)) {
+      setLangSignal(newLang);
     }
+  }).catch((error) => {
+    console.error("Failed to listen for language changes:", error);
   });
 
-  import("@tauri-apps/api/event").then(({ listen }) => {
-    listen<string>("tray:set-language", (event) => {
-      const newLang = event.payload;
-      if (newLang === "en" || newLang === "zh") {
-        setLang(newLang as Lang);
-      }
-    });
+  listen<string>("tray:set-language", (event) => {
+    const newLang = event.payload;
+    if (isLang(newLang)) {
+      void setLang(newLang).catch((error) => {
+        console.error("Failed to set language from tray:", error);
+      });
+    }
+  }).catch((error) => {
+    console.error("Failed to listen for tray language changes:", error);
   });
 
   function I18nProvider(props: { children: JSX.Element }) {
