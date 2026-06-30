@@ -21,6 +21,7 @@ import type { PanelState, SnapGuide, WindowInfo } from "../lib/types";
 const PANEL_HEADER_HEIGHT = 32;
 const NOTICE_TIMEOUT_MS = 5000;
 const THUMBNAIL_HEALTH_INTERVAL_MS = 30000;
+const THUMBNAIL_SYNC_NOTICE_COOLDOWN_MS = 10000;
 const TOOL_CONFIG: Record<string, { width: number; height: number }> = {
   calculator: { width: 280, height: 420 },
   notes: { width: 350, height: 400 },
@@ -88,6 +89,7 @@ export function WorkbenchCanvas() {
   let canvasRef!: HTMLDivElement;
   let saveTimer: number | undefined;
   let autoSaveFailureNotified = false;
+  let lastThumbnailSyncFailureNoticeAt = 0;
   const noticeTimers: number[] = [];
 
   const getNextZIndex = () => {
@@ -140,6 +142,14 @@ export function WorkbenchCanvas() {
       autoSaveFailureNotified = true;
     }
     showNotice(t("app.toast.saveLayoutFailed", { reason: errorMessage(error) }));
+  };
+
+  const reportThumbnailSyncFailure = (context: string, error: unknown) => {
+    console.error(`Failed to sync thumbnail rect (${context}):`, error);
+    const now = Date.now();
+    if (now - lastThumbnailSyncFailureNoticeAt < THUMBNAIL_SYNC_NOTICE_COOLDOWN_MS) return;
+    lastThumbnailSyncFailureNoticeAt = now;
+    showNotice(t("app.toast.thumbnailSyncFailed", { reason: errorMessage(error) }));
   };
 
   const toolTitle = (toolId: string) => {
@@ -202,7 +212,7 @@ export function WorkbenchCanvas() {
     showNotice(t("app.toast.sourceClosed", { title: panel.title }), "info");
   };
 
-  const syncThumbnailRect = async (panel: PanelState) => {
+  const syncThumbnailRect = async (panel: PanelState, context = "sync") => {
     if (panel.type !== "thumbnail" || !panel.sourceHwnd) return true;
     const rect = getThumbnailRect(panel);
     try {
@@ -213,14 +223,15 @@ export function WorkbenchCanvas() {
         removeClosedSourcePanel(panel.id, panel.sourceHwnd);
         return false;
       }
-      throw e;
+      reportThumbnailSyncFailure(context, e);
+      return false;
     }
   };
 
-  const syncAllThumbnailRects = () => {
+  const syncAllThumbnailRects = (context: string) => {
     panels().forEach((panel) => {
       if (panel.type === "thumbnail") {
-        void syncThumbnailRect(panel).catch(console.error);
+        void syncThumbnailRect(panel, context);
       }
     });
   };
@@ -257,7 +268,7 @@ export function WorkbenchCanvas() {
     const movedPanel = { ...panel, x: position.x, y: position.y };
     setPanels((prev) => prev.map((p) => (p.id === panelId ? movedPanel : p)));
     if (movedPanel.type === "thumbnail") {
-      void syncThumbnailRect(movedPanel).catch(console.error);
+      void syncThumbnailRect(movedPanel, "external-drop");
     }
   };
 
@@ -501,7 +512,7 @@ export function WorkbenchCanvas() {
         y: snapResult.rect.y,
       });
       if (movedPanel.type === "thumbnail") {
-        void syncThumbnailRect(movedPanel).catch(console.error);
+        void syncThumbnailRect(movedPanel, "drag");
       }
 
       return prev.map((p) => (p.id === activePanelId ? movedPanel : p));
@@ -554,11 +565,7 @@ export function WorkbenchCanvas() {
 
     const panel = panels().find((p) => p.id === draggingId());
     if (panel && panel.type === "thumbnail" && panel.sourceHwnd) {
-      try {
-        await syncThumbnailRect(panel);
-      } catch (e) {
-        console.error("Failed to update thumbnail rect:", e);
-      }
+      await syncThumbnailRect(panel, "drop");
     }
 
     setDraggingId(null);
@@ -579,7 +586,7 @@ export function WorkbenchCanvas() {
         });
         return changed ? next : prev;
       });
-      window.requestAnimationFrame(syncAllThumbnailRects);
+      window.requestAnimationFrame(() => syncAllThumbnailRects("resize"));
     }
   };
 
@@ -742,7 +749,7 @@ export function WorkbenchCanvas() {
     })();
 
     const thumbnailHealthTimer = window.setInterval(
-      syncAllThumbnailRects,
+      () => syncAllThumbnailRects("health-check"),
       THUMBNAIL_HEALTH_INTERVAL_MS
     );
 

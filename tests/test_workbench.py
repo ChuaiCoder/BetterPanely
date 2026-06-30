@@ -470,6 +470,7 @@ class TestWorkbenchRuntimeShape:
         assert "app.toast.openToolFailed" in canvas_tsx
         assert "app.toast.removePanelFailed" in canvas_tsx
         assert "app.toast.eventListenerFailed" in canvas_tsx
+        assert "app.toast.thumbnailSyncFailed" in canvas_tsx
         assert "app.toast.sourceClosed" in canvas_tsx
         assert "app.toast.stalePanelSkipped" in canvas_tsx
         assert "onError={(error) =>" in canvas_tsx
@@ -489,6 +490,8 @@ class TestWorkbenchRuntimeShape:
         assert "app.toast.openToolFailed" in zh_locale
         assert "app.toast.eventListenerFailed" in en_locale
         assert "app.toast.eventListenerFailed" in zh_locale
+        assert "app.toast.thumbnailSyncFailed" in en_locale
+        assert "app.toast.thumbnailSyncFailed" in zh_locale
 
     def test_workbench_event_listener_setup_is_failure_isolated(self, repo_root):
         canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
@@ -543,6 +546,46 @@ class TestWorkbenchRuntimeShape:
         assert 'reportSaveLayoutFailure("cleanup", error)' in cleanup_block
         assert "saveLayout(snapshot).catch(console.error)" not in canvas_tsx
         assert 'console.error("Failed to save layout:", error)' not in canvas_tsx
+
+    def test_thumbnail_rect_sync_failures_are_reported_without_drag_spam(self, repo_root):
+        canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
+            encoding="utf-8"
+        )
+        en_locale = (repo_root / "src/lib/locales/en.json").read_text(
+            encoding="utf-8"
+        )
+        zh_locale = (repo_root / "src/lib/locales/zh.json").read_text(
+            encoding="utf-8"
+        )
+        sync_rect_block = canvas_tsx.split(
+            "const syncThumbnailRect = async", 1
+        )[1].split("const getPanelInitialPosition", 1)[0]
+
+        assert "THUMBNAIL_SYNC_NOTICE_COOLDOWN_MS = 10000" in canvas_tsx
+        assert "let lastThumbnailSyncFailureNoticeAt = 0" in canvas_tsx
+        assert "const reportThumbnailSyncFailure = (context: string, error: unknown)" in canvas_tsx
+        assert "Failed to sync thumbnail rect (${context}):" in canvas_tsx
+        assert "Date.now()" in canvas_tsx
+        assert (
+            "now - lastThumbnailSyncFailureNoticeAt < THUMBNAIL_SYNC_NOTICE_COOLDOWN_MS"
+            in canvas_tsx
+        )
+        assert "lastThumbnailSyncFailureNoticeAt = now" in canvas_tsx
+        assert "app.toast.thumbnailSyncFailed" in canvas_tsx
+        assert "syncThumbnailRect = async (panel: PanelState, context = \"sync\")" in canvas_tsx
+        assert "reportThumbnailSyncFailure(context, e)" in sync_rect_block
+        assert "throw e" not in sync_rect_block
+        assert "void syncThumbnailRect(panel, context)" in canvas_tsx
+        assert 'void syncThumbnailRect(movedPanel, "external-drop")' in canvas_tsx
+        assert 'void syncThumbnailRect(movedPanel, "drag")' in canvas_tsx
+        assert 'await syncThumbnailRect(panel, "drop")' in canvas_tsx
+        assert 'syncAllThumbnailRects("resize")' in canvas_tsx
+        assert 'syncAllThumbnailRects("health-check")' in canvas_tsx
+        assert "syncThumbnailRect(panel).catch(console.error)" not in canvas_tsx
+        assert "syncThumbnailRect(movedPanel).catch(console.error)" not in canvas_tsx
+        assert 'console.error("Failed to update thumbnail rect:", e)' not in canvas_tsx
+        assert "app.toast.thumbnailSyncFailed" in en_locale
+        assert "app.toast.thumbnailSyncFailed" in zh_locale
 
     def test_blank_canvas_context_menu_offers_core_actions(self, repo_root):
         canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(

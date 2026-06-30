@@ -35,6 +35,7 @@
   "app.toast.openToolFailed": "Failed to open tool window: {reason}",
   "app.toast.removePanelFailed": "Failed to remove panel: {reason}",
   "app.toast.saveLayoutFailed": "Failed to save layout: {reason}",
+  "app.toast.thumbnailSyncFailed": "Failed to update thumbnail position: {reason}",
   "app.toast.sourceClosed": "{title} is no longer available",
   "app.toast.eventListenerFailed": "Failed to initialize {event}: {reason}",
   "app.toast.stalePanelSkipped": "Skipped unavailable saved window: {title}",
