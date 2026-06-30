@@ -349,15 +349,38 @@ class TestWorkbenchRuntimeShape:
             repo_root / "tests/helpers/win32_helper.py"
         ).read_text(encoding="utf-8")
         root_pytest_ini = (repo_root / "pytest.ini").read_text(encoding="utf-8")
+        basic_tests = (repo_root / "tests/test_basic.py").read_text(encoding="utf-8")
+        i18n_tests = (repo_root / "tests/test_i18n.py").read_text(encoding="utf-8")
 
+        assert 'RUN_E2E_ENV = "BETTERPANELY_RUN_E2E"' in conftest_py
+        assert "def pytest_collection_modifyitems(config, items):" in conftest_py
+        assert "item.add_marker(skip_e2e)" in conftest_py
+        assert 'pytest.skip(f"set {RUN_E2E_ENV}={RUN_E2E_VALUE} to run E2E tests")' in conftest_py
+        assert "tmp_path_factory.mktemp(\"betterpanely-e2e-runtime\")" in conftest_py
+        assert 'env["APPDATA"] = str(e2e_appdata_dir)' in conftest_py
+        assert 'env["LOCALAPPDATA"] = str(local_appdata)' in conftest_py
+        assert 'env["TEMP"] = str(temp_dir)' in conftest_py
+        assert 'env["TMP"] = str(temp_dir)' in conftest_py
+        assert "shell=False" in conftest_py
+        assert 'creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)' in conftest_py
+        assert "def close_owned_windows(pid: int, title_contains: str | None = None)" in conftest_py
+        assert "find_process_windows(pid, title_contains=title_contains)" in conftest_py
+        assert "close_owned_windows(proc.pid)" in conftest_py
         assert "wait_for_process_window(proc.pid" in conftest_py
         assert "wait_for_process_window(app_process.pid" in conftest_py
         assert "wait_for_window(" not in conftest_py
-        assert 'w["pid"] == proc.pid' in conftest_py
+        assert "find_betterpanely_windows" not in conftest_py
         assert "QueryFullProcessImageNameW" in win32_helper
         assert "better-panely.exe" in win32_helper
         assert 'if "BetterPanely" in w["title"]' not in win32_helper
         assert 'elif "Settings" in w["title"]' not in win32_helper
+        assert "find_process_windows(main_window[\"pid\"])" in basic_tests
+        assert "find_window_by_class" not in basic_tests
+        assert "find_betterpanely_windows" not in basic_tests
+        assert "find_process_windows(main_window[\"pid\"])" in i18n_tests
+        assert "find_betterpanely_windows" not in i18n_tests
+        assert 'os.environ.get("APPDATA"' not in i18n_tests
+        assert "\n        pass" not in i18n_tests
         assert '-m "not e2e"' in root_pytest_ini
         assert not (repo_root / "tests/pytest.ini").exists()
 

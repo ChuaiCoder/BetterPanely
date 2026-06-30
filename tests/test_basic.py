@@ -4,8 +4,7 @@ Basic launch & smoke tests for BetterPanely.
 import time
 import pytest
 from helpers.win32_helper import (
-    find_betterpanely_windows,
-    find_window_by_class,
+    find_process_windows,
     is_window_visible,
 )
 
@@ -45,8 +44,9 @@ class TestTrayIcon:
 
     def test_app_has_windows(self, main_window):
         """App should expose at least the main workbench window."""
-        bp_wins = find_betterpanely_windows()
-        assert len(bp_wins) >= 1, "Expected at least the main window"
+        owned_windows = find_process_windows(main_window["pid"])
+        assert len(owned_windows) >= 1, "Expected at least the main window"
+        assert all(w["pid"] == main_window["pid"] for w in owned_windows)
 
 
 class TestWorkbenchMode:
@@ -58,7 +58,11 @@ class TestWorkbenchMode:
 
     def test_workbench_does_not_create_legacy_containers(self, main_window):
         """The DWM workbench should not use old BetterPanelyContainer windows."""
-        containers = find_window_by_class("BetterPanelyContainer")
+        containers = [
+            window
+            for window in find_process_windows(main_window["pid"])
+            if "BetterPanelyContainer" in window["class_name"]
+        ]
         assert containers == []
 
     def test_idle_workbench_does_not_crash(self, main_window, clean_state):
