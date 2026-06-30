@@ -2,11 +2,15 @@
 Basic launch & smoke tests for BetterPanely.
 """
 import time
+import pytest
 from helpers.win32_helper import (
     find_betterpanely_windows,
     find_window_by_class,
     is_window_visible,
 )
+
+
+pytestmark = pytest.mark.e2e
 
 
 class TestAppLaunch:

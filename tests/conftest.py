@@ -9,9 +9,8 @@ from pathlib import Path
 from helpers.win32_helper import (
     get_exe_path,
     find_betterpanely_windows,
-    wait_for_window,
+    wait_for_process_window,
     close_window,
-    find_window_by_title,
 )
 
 
@@ -37,7 +36,7 @@ def app_process():
     # Wait for the main window to appear
     time.sleep(3)
 
-    main_win = wait_for_window("BetterPanely", timeout=15)
+    main_win = wait_for_process_window(proc.pid, title_contains="BetterPanely", timeout=15)
     if not main_win:
         proc.terminate()
         proc.wait(timeout=5)
@@ -45,9 +44,9 @@ def app_process():
 
     yield proc
 
-    # Cleanup: close all BetterPanely windows and terminate
+    # Cleanup only windows owned by the process this fixture launched.
     for _ in range(3):
-        bp_wins = find_betterpanely_windows()
+        bp_wins = [w for w in find_betterpanely_windows() if w["pid"] == proc.pid]
         for w in bp_wins:
             close_window(w["hwnd"])
         time.sleep(0.5)
@@ -70,15 +69,16 @@ def main_window(app_process):
 @pytest.fixture(scope="function")
 def clean_state(main_window):
     """Ensure a clean state: close leftover utility windows but keep the workbench."""
+    owner_pid = main_window["pid"]
     bp_wins = find_betterpanely_windows()
     for w in bp_wins:
-        if "Settings" in w["title"]:
+        if w["pid"] == owner_pid and "Settings" in w["title"]:
             close_window(w["hwnd"])
     time.sleep(0.5)
     yield
     # Post-test cleanup
     bp_wins = find_betterpanely_windows()
     for w in bp_wins:
-        if "Settings" in w["title"]:
+        if w["pid"] == owner_pid and "Settings" in w["title"]:
             close_window(w["hwnd"])
     time.sleep(0.3)

@@ -61,7 +61,7 @@ interface PanelInitialPosition {
  * 管理所有面板的布局、拖拽、磁性吸附、状态持久化等核心功能
  */
 export function WorkbenchCanvas() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [panels, setPanels] = createSignal<PanelState[]>([]);
   const [draggingId, setDraggingId] = createSignal<string | null>(null);
   const [dragOffset, setDragOffset] = createSignal({ x: 0, y: 0 });
@@ -97,6 +97,30 @@ export function WorkbenchCanvas() {
       setNotices((prev) => prev.filter((notice) => notice.id !== id));
     }, NOTICE_TIMEOUT_MS);
     noticeTimers.push(timer);
+  };
+
+  const toolTitle = (toolId: string) => {
+    const key = `tools.${toolId}`;
+    const translated = t(key);
+    return translated === key ? toolId : translated;
+  };
+
+  const withLocalizedToolTitle = (panel: PanelState): PanelState => {
+    if (panel.type !== "tool" || !panel.toolId) return panel;
+    const title = toolTitle(panel.toolId);
+    return panel.title === title ? panel : { ...panel, title };
+  };
+
+  const syncToolPanelTitles = () => {
+    setPanels((prev) => {
+      let changed = false;
+      const next = prev.map((panel) => {
+        const localized = withLocalizedToolTitle(panel);
+        if (localized !== panel) changed = true;
+        return localized;
+      });
+      return changed ? next : prev;
+    });
   };
 
   const getThumbnailRect = (panel: PanelState) => {
@@ -238,19 +262,19 @@ export function WorkbenchCanvas() {
   };
 
   const addToolPanel = (toolId: string) => {
-    const toolConfig: Record<string, { title: string; width: number; height: number }> = {
-      calculator: { title: t("tools.calculator") || "Calculator", width: 280, height: 420 },
-      notes: { title: t("tools.notes") || "Notes", width: 350, height: 400 },
-      timer: { title: t("tools.timer") || "Timer", width: 300, height: 200 },
-      weather: { title: t("tools.weather") || "Weather", width: 300, height: 350 },
+    const toolConfig: Record<string, { width: number; height: number }> = {
+      calculator: { width: 280, height: 420 },
+      notes: { width: 350, height: 400 },
+      timer: { width: 300, height: 200 },
+      weather: { width: 300, height: 350 },
     };
-    const config = toolConfig[toolId] || { title: toolId, width: 300, height: 300 };
+    const config = toolConfig[toolId] || { width: 300, height: 300 };
 
     const newPanel: PanelState = {
       id: `tool_${toolId}_${Date.now()}`,
       type: "tool",
       toolId,
-      title: config.title,
+      title: toolTitle(toolId),
       x: 100 + panels().length * 20,
       y: 100 + panels().length * 20,
       width: config.width,
@@ -492,7 +516,7 @@ export function WorkbenchCanvas() {
 
     for (const panel of savedPanels) {
       if (panel.type === "tool") {
-        restored.push({ ...panel, visible: true });
+        restored.push(withLocalizedToolTitle({ ...panel, visible: true }));
         continue;
       }
 
@@ -631,6 +655,14 @@ export function WorkbenchCanvas() {
       }
       noticeTimers.forEach((timer) => window.clearTimeout(timer));
     });
+  });
+
+  let lastToolTitleLang = lang();
+  createEffect(() => {
+    const currentLang = lang();
+    if (currentLang === lastToolTitleLang) return;
+    lastToolTitleLang = currentLang;
+    syncToolPanelTitles();
   });
 
   return (

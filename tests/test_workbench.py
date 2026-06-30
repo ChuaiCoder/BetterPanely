@@ -192,6 +192,13 @@ class TestWorkbenchRuntimeShape:
         assert "openToolWindow(panel.toolId)" in canvas_tsx
         assert "app.toast.openToolFailed" in canvas_tsx
         assert "onFocus={handleFocusPanel}" in canvas_tsx
+        assert "const { t, lang } = useI18n();" in canvas_tsx
+        assert "const toolTitle = (toolId: string)" in canvas_tsx
+        assert "withLocalizedToolTitle" in canvas_tsx
+        assert "syncToolPanelTitles" in canvas_tsx
+        assert "lastToolTitleLang" in canvas_tsx
+        assert "title: toolTitle(toolId)" in canvas_tsx
+        assert "restored.push(withLocalizedToolTitle" in canvas_tsx
         assert "onFocus: (id: string) => void" in tool_panel
         assert 'closest(".panel-focus")' in tool_panel
         assert "props.onFocus(props.panel.id)" in tool_panel
@@ -201,6 +208,22 @@ class TestWorkbenchRuntimeShape:
         assert "app.openToolWindow" in zh_locale
         assert "app.toast.openToolFailed" in en_locale
         assert "app.toast.openToolFailed" in zh_locale
+
+    def test_e2e_window_cleanup_is_process_scoped(self, repo_root):
+        conftest_py = (repo_root / "tests/conftest.py").read_text(encoding="utf-8")
+        win32_helper = (
+            repo_root / "tests/helpers/win32_helper.py"
+        ).read_text(encoding="utf-8")
+        root_pytest_ini = (repo_root / "pytest.ini").read_text(encoding="utf-8")
+
+        assert "wait_for_process_window(proc.pid" in conftest_py
+        assert 'w["pid"] == proc.pid' in conftest_py
+        assert "QueryFullProcessImageNameW" in win32_helper
+        assert "better-panely.exe" in win32_helper
+        assert 'if "BetterPanely" in w["title"]' not in win32_helper
+        assert 'elif "Settings" in w["title"]' not in win32_helper
+        assert '-m "not e2e"' in root_pytest_ini
+        assert not (repo_root / "tests/pytest.ini").exists()
 
     def test_workbench_keyboard_shortcuts_use_selected_panel(self, repo_root):
         canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(

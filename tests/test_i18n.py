@@ -2,9 +2,13 @@
 Language switching tests for BetterPanely.
 Verifies Chinese/English switching works correctly.
 """
+import pytest
 from helpers.win32_helper import (
     find_betterpanely_windows,
 )
+
+
+pytestmark = pytest.mark.e2e
 
 
 class TestLanguageSwitch:

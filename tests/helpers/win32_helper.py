@@ -23,6 +23,7 @@ BOOL = wintypes.BOOL
 HANDLE = wintypes.HANDLE
 
 # Constants
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 WM_CLOSE = 0x0010
 SW_SHOW = 5
 SW_RESTORE = 9
@@ -99,6 +100,56 @@ def wait_for_window(title_contains: str, timeout: float = 10.0) -> dict | None:
     return None
 
 
+def get_process_image_path(pid: int) -> str:
+    """Return the executable path for a process, or an empty string if inaccessible."""
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return ""
+
+    try:
+        size = DWORD(32768)
+        buffer = ctypes.create_unicode_buffer(size.value)
+        if kernel32.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size)):
+            return buffer.value
+        return ""
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def process_basename(pid: int) -> str:
+    """Return the lower-case executable filename for a process."""
+    process_path = get_process_image_path(pid)
+    return Path(process_path).name.lower() if process_path else ""
+
+
+def find_process_windows(pid: int, title_contains: str | None = None) -> list[dict]:
+    """Find visible top-level windows owned by one process."""
+    title_filter = title_contains.lower() if title_contains else None
+    windows = []
+    for window in enum_windows():
+        if window["pid"] != pid:
+            continue
+        if title_filter and title_filter not in window["title"].lower():
+            continue
+        windows.append(window)
+    return windows
+
+
+def wait_for_process_window(
+    pid: int,
+    title_contains: str | None = None,
+    timeout: float = 10.0,
+) -> dict | None:
+    """Wait for a visible top-level window owned by one process."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        wins = find_process_windows(pid, title_contains=title_contains)
+        if wins:
+            return wins[0]
+        time.sleep(0.3)
+    return None
+
+
 def close_window(hwnd) -> bool:
     """Send WM_CLOSE to a window."""
     return user32.PostMessageW(hwnd, WM_CLOSE, 0, 0) != 0
@@ -122,14 +173,13 @@ def bring_window_to_front(hwnd):
 
 
 def find_betterpanely_windows() -> list[dict]:
-    """Find BetterPanely top-level windows used by the workbench app."""
+    """Find BetterPanely app windows by executable, not by title text."""
     all_wins = enum_windows()
     bp_wins = []
     for w in all_wins:
-        if "BetterPanely" in w["title"]:
-            bp_wins.append(w)
-        elif "Settings" in w["title"]:
-            bp_wins.append(w)
+        process_path = get_process_image_path(w["pid"])
+        if Path(process_path).name.lower() == "better-panely.exe":
+            bp_wins.append({**w, "process_path": process_path})
     return bp_wins
 
 
