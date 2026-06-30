@@ -87,6 +87,7 @@ export function WorkbenchCanvas() {
 
   let canvasRef!: HTMLDivElement;
   let saveTimer: number | undefined;
+  let autoSaveFailureNotified = false;
   const noticeTimers: number[] = [];
 
   const getNextZIndex = () => {
@@ -121,6 +122,24 @@ export function WorkbenchCanvas() {
   const handleEventListenerError = (eventName: string, error: unknown) => {
     console.error(`Failed to listen for ${eventName}:`, error);
     showNotice(t("app.toast.eventListenerFailed", { event: eventName, reason: errorMessage(error) }));
+  };
+
+  const markSaveLayoutSuccess = () => {
+    autoSaveFailureNotified = false;
+  };
+
+  const reportSaveLayoutFailure = (
+    context: "manual" | "autosave" | "cleanup",
+    error: unknown,
+    notify = false
+  ) => {
+    console.error(`Failed to save layout (${context}):`, error);
+    if (!notify) return;
+    if (context === "autosave") {
+      if (autoSaveFailureNotified) return;
+      autoSaveFailureNotified = true;
+    }
+    showNotice(t("app.toast.saveLayoutFailed", { reason: errorMessage(error) }));
   };
 
   const toolTitle = (toolId: string) => {
@@ -251,7 +270,9 @@ export function WorkbenchCanvas() {
       window.clearTimeout(saveTimer);
     }
     saveTimer = window.setTimeout(() => {
-      saveLayout(snapshot).catch(console.error);
+      saveLayout(snapshot)
+        .then(markSaveLayoutSuccess)
+        .catch((error) => reportSaveLayoutFailure("autosave", error, true));
     }, 400);
   });
 
@@ -380,11 +401,11 @@ export function WorkbenchCanvas() {
 
   const saveCurrentLayout = () =>
     saveLayout(panels())
-      .then(() => showNotice(t("app.toast.layoutSaved"), "success"))
-      .catch((error) => {
-        console.error("Failed to save layout:", error);
-        showNotice(t("app.toast.saveLayoutFailed", { reason: errorMessage(error) }));
-      });
+      .then(() => {
+        markSaveLayoutSuccess();
+        showNotice(t("app.toast.layoutSaved"), "success");
+      })
+      .catch((error) => reportSaveLayoutFailure("manual", error, true));
 
   const focusPanel = async (panel: PanelState) => {
     if (panel.type === "thumbnail" && panel.sourceHwnd) {
@@ -735,9 +756,9 @@ export function WorkbenchCanvas() {
         window.clearTimeout(saveTimer);
       }
       if (layoutReady()) {
-        saveLayout(panels()).catch((error) => {
-          console.error("Failed to save layout:", error);
-        });
+        saveLayout(panels())
+          .then(markSaveLayoutSuccess)
+          .catch((error) => reportSaveLayoutFailure("cleanup", error));
       }
       noticeTimers.forEach((timer) => window.clearTimeout(timer));
     });

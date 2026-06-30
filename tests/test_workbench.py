@@ -508,6 +508,42 @@ class TestWorkbenchRuntimeShape:
         assert "const unlistenNewPanel = await listen" not in canvas_tsx
         assert "addCleanup(await listen" in canvas_tsx
 
+    def test_workbench_layout_save_failures_are_reported_without_autosave_spam(self, repo_root):
+        canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
+            encoding="utf-8"
+        )
+        autosave_block = canvas_tsx.split(
+            "saveTimer = window.setTimeout(() => {", 1
+        )[1].split("}, 400);", 1)[0]
+        save_current_block = canvas_tsx.split(
+            "const saveCurrentLayout = () =>", 1
+        )[1].split("const focusPanel = async", 1)[0]
+        cleanup_block = canvas_tsx.split(
+            "onCleanup(() => {", 1
+        )[1].split("noticeTimers.forEach", 1)[0]
+
+        assert "let autoSaveFailureNotified = false" in canvas_tsx
+        assert "const markSaveLayoutSuccess = () =>" in canvas_tsx
+        assert "autoSaveFailureNotified = false" in canvas_tsx
+        assert "const reportSaveLayoutFailure = (" in canvas_tsx
+        assert 'context: "manual" | "autosave" | "cleanup"' in canvas_tsx
+        assert "Failed to save layout (${context}):" in canvas_tsx
+        assert 'if (context === "autosave")' in canvas_tsx
+        assert "if (autoSaveFailureNotified) return" in canvas_tsx
+        assert "autoSaveFailureNotified = true" in canvas_tsx
+        assert "app.toast.saveLayoutFailed" in canvas_tsx
+        assert "saveLayout(snapshot)" in autosave_block
+        assert ".then(markSaveLayoutSuccess)" in autosave_block
+        assert 'reportSaveLayoutFailure("autosave", error, true)' in autosave_block
+        assert "saveLayout(panels())" in save_current_block
+        assert "showNotice(t(\"app.toast.layoutSaved\"), \"success\")" in save_current_block
+        assert 'reportSaveLayoutFailure("manual", error, true)' in save_current_block
+        assert "saveLayout(panels())" in cleanup_block
+        assert ".then(markSaveLayoutSuccess)" in cleanup_block
+        assert 'reportSaveLayoutFailure("cleanup", error)' in cleanup_block
+        assert "saveLayout(snapshot).catch(console.error)" not in canvas_tsx
+        assert 'console.error("Failed to save layout:", error)' not in canvas_tsx
+
     def test_blank_canvas_context_menu_offers_core_actions(self, repo_root):
         canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
             encoding="utf-8"
