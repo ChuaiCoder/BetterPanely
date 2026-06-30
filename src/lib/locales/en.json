@@ -36,6 +36,7 @@
   "app.toast.removePanelFailed": "Failed to remove panel: {reason}",
   "app.toast.saveLayoutFailed": "Failed to save layout: {reason}",
   "app.toast.sourceClosed": "{title} is no longer available",
+  "app.toast.eventListenerFailed": "Failed to initialize {event}: {reason}",
   "app.toast.stalePanelSkipped": "Skipped unavailable saved window: {title}",
   "app.language": "Language",
   "app.langToggle": "EN / 中文",

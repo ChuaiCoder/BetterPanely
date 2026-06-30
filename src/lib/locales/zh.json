@@ -36,6 +36,7 @@
   "app.toast.removePanelFailed": "移除面板失败: {reason}",
   "app.toast.saveLayoutFailed": "保存布局失败: {reason}",
   "app.toast.sourceClosed": "{title} 已不可用",
+  "app.toast.eventListenerFailed": "初始化 {event} 失败: {reason}",
   "app.toast.stalePanelSkipped": "已跳过不可用的已保存窗口: {title}",
   "app.language": "语言",
   "app.langToggle": "中文 / EN",

@@ -469,6 +469,7 @@ class TestWorkbenchRuntimeShape:
         assert "app.toast.loadLayoutFailed" in canvas_tsx
         assert "app.toast.openToolFailed" in canvas_tsx
         assert "app.toast.removePanelFailed" in canvas_tsx
+        assert "app.toast.eventListenerFailed" in canvas_tsx
         assert "app.toast.sourceClosed" in canvas_tsx
         assert "app.toast.stalePanelSkipped" in canvas_tsx
         assert "onError={(error) =>" in canvas_tsx
@@ -486,6 +487,26 @@ class TestWorkbenchRuntimeShape:
         assert "app.toast.enumerateWindowsFailed" in zh_locale
         assert "app.toast.openToolFailed" in en_locale
         assert "app.toast.openToolFailed" in zh_locale
+        assert "app.toast.eventListenerFailed" in en_locale
+        assert "app.toast.eventListenerFailed" in zh_locale
+
+    def test_workbench_event_listener_setup_is_failure_isolated(self, repo_root):
+        canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
+            encoding="utf-8"
+        )
+
+        assert "const handleEventListenerError = (eventName: string, error: unknown)" in canvas_tsx
+        assert "Failed to listen for ${eventName}:" in canvas_tsx
+        assert "app.toast.eventListenerFailed" in canvas_tsx
+        assert 'handleEventListenerError("tray:new-panel", error)' in canvas_tsx
+        assert 'handleEventListenerError("tray:launch-tool", error)' in canvas_tsx
+        assert 'handleEventListenerError("tray:capture-hotkey", error)' in canvas_tsx
+        assert 'handleEventListenerError("thumb:source-closed", error)' in canvas_tsx
+        assert 'handleEventListenerError("drag:entered-workbench", error)' in canvas_tsx
+        assert 'handleEventListenerError("drag:moved-workbench", error)' in canvas_tsx
+        assert 'handleEventListenerError("drag:ended-workbench", error)' in canvas_tsx
+        assert "const unlistenNewPanel = await listen" not in canvas_tsx
+        assert "addCleanup(await listen" in canvas_tsx
 
     def test_blank_canvas_context_menu_offers_core_actions(self, repo_root):
         canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(

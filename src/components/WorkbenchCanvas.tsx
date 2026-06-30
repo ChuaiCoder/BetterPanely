@@ -118,6 +118,11 @@ export function WorkbenchCanvas() {
     noticeTimers.push(timer);
   };
 
+  const handleEventListenerError = (eventName: string, error: unknown) => {
+    console.error(`Failed to listen for ${eventName}:`, error);
+    showNotice(t("app.toast.eventListenerFailed", { event: eventName, reason: errorMessage(error) }));
+  };
+
   const toolTitle = (toolId: string) => {
     const key = `tools.${toolId}`;
     const translated = t(key);
@@ -619,74 +624,100 @@ export function WorkbenchCanvas() {
         setLayoutReady(true);
       }
 
-      const unlistenNewPanel = await listen("tray:new-panel", () => {
-        setIsDialogOpen(true);
-      });
-      const unlistenLaunchTool = await listen<string>("tray:launch-tool", (event) => {
-        addToolPanel(event.payload);
-      });
-      const unlistenCaptureHotkey = await listen("tray:capture-hotkey", async () => {
-        try {
-          const windowInfo = await captureFocusedWindow();
-          if (windowInfo) {
-            await addThumbnailPanel(windowInfo.hwnd, windowInfo.title);
-          }
-        } catch (e) {
-          console.error("Failed to capture focused window:", e);
-          showNotice(t("app.toast.captureFailed", { reason: errorMessage(e) }));
-        }
-      });
-      const unlistenSourceClosed = await listen<SourceClosedPayload>(
-        "thumb:source-closed",
-        (event) => {
-          removeClosedSourcePanel(event.payload.panelId, event.payload.sourceHwnd);
-        }
-      );
-      const unlistenDragEntered = await listen<DragEnteredWorkbenchPayload>(
-        "drag:entered-workbench",
-        async (event) => {
-          const position = workbenchClientPositionToCanvas(event.payload);
-          const panel = await addThumbnailPanel(
-            event.payload.sourceHwnd,
-            event.payload.title,
-            position
-          );
-          if (panel) {
-            setDraggedExternalPanelId(panel.id);
-          }
-        }
-      );
-      const unlistenDragMoved = await listen<DragPositionPayload>(
-        "drag:moved-workbench",
-        (event) => {
-          const panelId = draggedExternalPanelId();
-          if (!panelId) return;
-          const panel = panels().find((p) => p.id === panelId);
-          if (panel?.sourceHwnd !== event.payload.sourceHwnd) return;
+      try {
+        addCleanup(await listen("tray:new-panel", () => {
+          setIsDialogOpen(true);
+        }));
+      } catch (error) {
+        handleEventListenerError("tray:new-panel", error);
+      }
 
-          movePanelToPosition(panelId, workbenchClientPositionToCanvas(event.payload));
-        }
-      );
-      const unlistenDragEnded = await listen<DragPositionPayload>(
-        "drag:ended-workbench",
-        (event) => {
-          const panelId = draggedExternalPanelId();
-          if (!panelId) return;
-          const panel = panels().find((p) => p.id === panelId);
-          if (panel?.sourceHwnd === event.payload.sourceHwnd) {
+      try {
+        addCleanup(await listen<string>("tray:launch-tool", (event) => {
+          addToolPanel(event.payload);
+        }));
+      } catch (error) {
+        handleEventListenerError("tray:launch-tool", error);
+      }
+
+      try {
+        addCleanup(await listen("tray:capture-hotkey", async () => {
+          try {
+            const windowInfo = await captureFocusedWindow();
+            if (windowInfo) {
+              await addThumbnailPanel(windowInfo.hwnd, windowInfo.title);
+            }
+          } catch (e) {
+            console.error("Failed to capture focused window:", e);
+            showNotice(t("app.toast.captureFailed", { reason: errorMessage(e) }));
+          }
+        }));
+      } catch (error) {
+        handleEventListenerError("tray:capture-hotkey", error);
+      }
+
+      try {
+        addCleanup(await listen<SourceClosedPayload>(
+          "thumb:source-closed",
+          (event) => {
+            removeClosedSourcePanel(event.payload.panelId, event.payload.sourceHwnd);
+          }
+        ));
+      } catch (error) {
+        handleEventListenerError("thumb:source-closed", error);
+      }
+
+      try {
+        addCleanup(await listen<DragEnteredWorkbenchPayload>(
+          "drag:entered-workbench",
+          async (event) => {
+            const position = workbenchClientPositionToCanvas(event.payload);
+            const panel = await addThumbnailPanel(
+              event.payload.sourceHwnd,
+              event.payload.title,
+              position
+            );
+            if (panel) {
+              setDraggedExternalPanelId(panel.id);
+            }
+          }
+        ));
+      } catch (error) {
+        handleEventListenerError("drag:entered-workbench", error);
+      }
+
+      try {
+        addCleanup(await listen<DragPositionPayload>(
+          "drag:moved-workbench",
+          (event) => {
+            const panelId = draggedExternalPanelId();
+            if (!panelId) return;
+            const panel = panels().find((p) => p.id === panelId);
+            if (panel?.sourceHwnd !== event.payload.sourceHwnd) return;
+
             movePanelToPosition(panelId, workbenchClientPositionToCanvas(event.payload));
           }
-          setDraggedExternalPanelId(null);
-        }
-      );
+        ));
+      } catch (error) {
+        handleEventListenerError("drag:moved-workbench", error);
+      }
 
-      addCleanup(unlistenNewPanel);
-      addCleanup(unlistenLaunchTool);
-      addCleanup(unlistenCaptureHotkey);
-      addCleanup(unlistenSourceClosed);
-      addCleanup(unlistenDragEntered);
-      addCleanup(unlistenDragMoved);
-      addCleanup(unlistenDragEnded);
+      try {
+        addCleanup(await listen<DragPositionPayload>(
+          "drag:ended-workbench",
+          (event) => {
+            const panelId = draggedExternalPanelId();
+            if (!panelId) return;
+            const panel = panels().find((p) => p.id === panelId);
+            if (panel?.sourceHwnd === event.payload.sourceHwnd) {
+              movePanelToPosition(panelId, workbenchClientPositionToCanvas(event.payload));
+            }
+            setDraggedExternalPanelId(null);
+          }
+        ));
+      } catch (error) {
+        handleEventListenerError("drag:ended-workbench", error);
+      }
     })();
 
     const thumbnailHealthTimer = window.setInterval(
