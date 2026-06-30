@@ -225,7 +225,8 @@ class TestWorkbenchRuntimeShape:
         assert "syncToolPanelTitles" in canvas_tsx
         assert "lastToolTitleLang" in canvas_tsx
         assert "title: toolTitle(toolId)" in canvas_tsx
-        assert "restored.push(withLocalizedToolTitle" in canvas_tsx
+        assert "restored.push(constrainPanelPosition(withLocalizedToolTitle" in canvas_tsx
+        assert "...getPanelInitialPosition(config.width, config.height)" in canvas_tsx
         assert "onFocus: (id: string) => void" in tool_panel
         assert 'closest(".panel-focus")' in tool_panel
         assert "props.onFocus(props.panel.id)" in tool_panel
@@ -408,6 +409,13 @@ class TestWorkbenchRuntimeShape:
         assert "draggedExternalPanelId" in canvas_tsx
         assert "movePanelToPosition" in canvas_tsx
         assert "initialPosition?: PanelInitialPosition" in canvas_tsx
+        assert "interface CanvasSize" in canvas_tsx
+        assert "const constrainPanelPosition = (panel: PanelState, size: CanvasSize = canvasSize())" in canvas_tsx
+        assert "size.width - panel.width - 8" in canvas_tsx
+        assert "size.height - panel.height - 8" in canvas_tsx
+        assert "const movedPanel = constrainPanelPosition({" in canvas_tsx
+        assert "const nextSize = { width: canvas.clientWidth, height: canvas.clientHeight }" in canvas_tsx
+        assert "const constrained = constrainPanelPosition(panel, nextSize)" in canvas_tsx
 
 
 class TestWorkbenchPersistenceShape:
@@ -441,7 +449,7 @@ class TestWorkbenchPersistenceShape:
         assert "../lib/workbench-api" in canvas_tsx
         assert "saveLayout" in canvas_tsx
         assert "captureFocusedWindow" in canvas_tsx
-        assert "const restoredPanel = { ...panel, id: panelId, visible: true }" in restore_block
+        assert "const restoredPanel = constrainPanelPosition({ ...panel, id: panelId, visible: true })" in restore_block
         assert (
             "await updateThumbnailRect(restoredPanel.id, rect.x, rect.y, rect.width, rect.height)"
             in restore_block

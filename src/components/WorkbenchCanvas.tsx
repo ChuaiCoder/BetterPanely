@@ -56,6 +56,11 @@ interface PanelInitialPosition {
   y: number;
 }
 
+interface CanvasSize {
+  width: number;
+  height: number;
+}
+
 /**
  * 工作台主画布组件
  * 管理所有面板的布局、拖拽、磁性吸附、状态持久化等核心功能
@@ -67,7 +72,7 @@ export function WorkbenchCanvas() {
   const [dragOffset, setDragOffset] = createSignal({ x: 0, y: 0 });
   const [snapGuides, setSnapGuides] = createSignal<SnapGuide[]>([]);
   const [isDialogOpen, setIsDialogOpen] = createSignal(false);
-  const [canvasSize, setCanvasSize] = createSignal({ width: 800, height: 600 });
+  const [canvasSize, setCanvasSize] = createSignal<CanvasSize>({ width: 800, height: 600 });
   const [layoutReady, setLayoutReady] = createSignal(false);
   const [selectedPanelId, setSelectedPanelId] = createSignal<string | null>(null);
   const [notices, setNotices] = createSignal<WorkbenchNotice[]>([]);
@@ -133,6 +138,12 @@ export function WorkbenchCanvas() {
     };
   };
 
+  const constrainPanelPosition = (panel: PanelState, size: CanvasSize = canvasSize()) => {
+    const x = clamp(panel.x, 8, Math.max(8, size.width - panel.width - 8));
+    const y = clamp(panel.y, 8, Math.max(8, size.height - panel.height - 8));
+    return x === panel.x && y === panel.y ? panel : { ...panel, x, y };
+  };
+
   const removeClosedSourcePanel = (panelId: string, sourceHwnd: number) => {
     const panel = panels().find(
       (p) => p.id === panelId || (p.type === "thumbnail" && p.sourceHwnd === sourceHwnd)
@@ -181,16 +192,12 @@ export function WorkbenchCanvas() {
     height: number,
     initialPosition?: PanelInitialPosition
   ) => {
-    if (!initialPosition) {
-      return {
-        x: 100 + panels().length * 20,
-        y: 100 + panels().length * 20,
-      };
-    }
+    const x = initialPosition ? initialPosition.x - width / 2 : 100 + panels().length * 20;
+    const y = initialPosition ? initialPosition.y - height / 2 : 100 + panels().length * 20;
 
     return {
-      x: clamp(initialPosition.x - width / 2, 8, Math.max(8, canvasSize().width - width - 8)),
-      y: clamp(initialPosition.y - height / 2, 8, Math.max(8, canvasSize().height - height - 8)),
+      x: clamp(x, 8, Math.max(8, canvasSize().width - width - 8)),
+      y: clamp(y, 8, Math.max(8, canvasSize().height - height - 8)),
     };
   };
 
@@ -284,8 +291,7 @@ export function WorkbenchCanvas() {
       type: "tool",
       toolId,
       title: toolTitle(toolId),
-      x: 100 + panels().length * 20,
-      y: 100 + panels().length * 20,
+      ...getPanelInitialPosition(config.width, config.height),
       width: config.width,
       height: config.height,
       zIndex: getNextZIndex(),
@@ -446,7 +452,11 @@ export function WorkbenchCanvas() {
 
       setSnapGuides(snapResult.guides);
 
-      const movedPanel = { ...draggedPanel, x: snapResult.rect.x, y: snapResult.rect.y };
+      const movedPanel = constrainPanelPosition({
+        ...draggedPanel,
+        x: snapResult.rect.x,
+        y: snapResult.rect.y,
+      });
       if (movedPanel.type === "thumbnail") {
         void syncThumbnailRect(movedPanel).catch(console.error);
       }
@@ -515,7 +525,17 @@ export function WorkbenchCanvas() {
   const handleResize = () => {
     const canvas = canvasRef;
     if (canvas) {
-      setCanvasSize({ width: canvas.clientWidth, height: canvas.clientHeight });
+      const nextSize = { width: canvas.clientWidth, height: canvas.clientHeight };
+      setCanvasSize(nextSize);
+      setPanels((prev) => {
+        let changed = false;
+        const next = prev.map((panel) => {
+          const constrained = constrainPanelPosition(panel, nextSize);
+          if (constrained !== panel) changed = true;
+          return constrained;
+        });
+        return changed ? next : prev;
+      });
       window.requestAnimationFrame(syncAllThumbnailRects);
     }
   };
@@ -525,7 +545,7 @@ export function WorkbenchCanvas() {
 
     for (const panel of savedPanels) {
       if (panel.type === "tool") {
-        restored.push(withLocalizedToolTitle({ ...panel, visible: true }));
+        restored.push(constrainPanelPosition(withLocalizedToolTitle({ ...panel, visible: true })));
         continue;
       }
 
@@ -534,7 +554,7 @@ export function WorkbenchCanvas() {
       let panelId: string | null = null;
       try {
         panelId = await addThumbnail(panel.sourceHwnd);
-        const restoredPanel = { ...panel, id: panelId, visible: true };
+        const restoredPanel = constrainPanelPosition({ ...panel, id: panelId, visible: true });
         const rect = getThumbnailRect(restoredPanel);
         await updateThumbnailRect(restoredPanel.id, rect.x, rect.y, rect.width, rect.height);
         restored.push(restoredPanel);
