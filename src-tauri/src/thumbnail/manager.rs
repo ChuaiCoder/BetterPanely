@@ -143,6 +143,12 @@ impl ThumbnailManager {
             }
             return Err("Thumbnail source window is no longer available".into());
         }
+        let right = x
+            .checked_add(width)
+            .ok_or("Thumbnail destination rectangle is out of range")?;
+        let bottom = y
+            .checked_add(height)
+            .ok_or("Thumbnail destination rectangle is out of range")?;
 
         let handle = self
             .thumbnails
@@ -152,8 +158,8 @@ impl ThumbnailManager {
         handle.dest_rect = RECT {
             left: x,
             top: y,
-            right: x + width,
-            bottom: y + height,
+            right,
+            bottom,
         };
 
         const DWM_TNP_RECTDESTINATION: u32 = 0x00000001;

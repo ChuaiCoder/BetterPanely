@@ -117,6 +117,33 @@ class TestWorkbenchRuntimeShape:
         assert "unwrap_or_else(|error|" in lib_rs
         assert "Failed to lock application state from tray" in tray_rs
 
+    def test_thumbnail_rect_commands_validate_numeric_bounds(self, repo_root):
+        workbench_cmds = (
+            repo_root / "src-tauri/src/commands/workbench_cmds.rs"
+        ).read_text(encoding="utf-8")
+        manager_rs = (repo_root / "src-tauri/src/thumbnail/manager.rs").read_text(
+            encoding="utf-8"
+        )
+        compact_workbench_cmds = "".join(workbench_cmds.split())
+
+        assert "fn finite_i32_arg(name: &str, value: f64) -> Result<i32, String>" in workbench_cmds
+        assert "value.is_finite()" in workbench_cmds
+        assert "Thumbnail {} must be finite" in workbench_cmds
+        assert "Thumbnail {} is out of range" in workbench_cmds
+        assert "fn positive_i32_arg(name: &str, value: f64) -> Result<i32, String>" in workbench_cmds
+        assert "Thumbnail {} must be positive" in workbench_cmds
+        assert 'finite_i32_arg("x", x)?' in workbench_cmds
+        assert 'finite_i32_arg("y", y)?' in workbench_cmds
+        assert 'positive_i32_arg("width", width)?' in workbench_cmds
+        assert 'positive_i32_arg("height", height)?' in workbench_cmds
+        assert "xasi32" not in compact_workbench_cmds
+        assert "widthasi32" not in compact_workbench_cmds
+        assert "checked_add(width)" in manager_rs
+        assert "checked_add(height)" in manager_rs
+        assert "Thumbnail destination rectangle is out of range" in manager_rs
+        assert "right: x + width" not in manager_rs
+        assert "bottom: y + height" not in manager_rs
+
     def test_thumbnail_source_lifetime_is_checked(self, repo_root):
         manager_rs = (repo_root / "src-tauri/src/thumbnail/manager.rs").read_text(
             encoding="utf-8"

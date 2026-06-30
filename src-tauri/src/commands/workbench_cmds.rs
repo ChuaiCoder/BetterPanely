@@ -52,6 +52,27 @@ fn get_workbench_hwnd(app: &AppHandle) -> Result<isize, String> {
     Ok(hwnd.0 as isize)
 }
 
+fn finite_i32_arg(name: &str, value: f64) -> Result<i32, String> {
+    if !value.is_finite() {
+        return Err(format!("Thumbnail {} must be finite", name));
+    }
+
+    let rounded = value.round();
+    if rounded < i32::MIN as f64 || rounded > i32::MAX as f64 {
+        return Err(format!("Thumbnail {} is out of range", name));
+    }
+
+    Ok(rounded as i32)
+}
+
+fn positive_i32_arg(name: &str, value: f64) -> Result<i32, String> {
+    let value = finite_i32_arg(name, value)?;
+    if value <= 0 {
+        return Err(format!("Thumbnail {} must be positive", name));
+    }
+    Ok(value)
+}
+
 struct ToolWindowConfig {
     title_key: &'static str,
     url: &'static str,
@@ -180,8 +201,13 @@ pub fn wb_update_thumbnail_rect(
     height: f64,
     thumbnail_manager: State<'_, SharedThumbnailManager>,
 ) -> Result<(), String> {
+    let x = finite_i32_arg("x", x)?;
+    let y = finite_i32_arg("y", y)?;
+    let width = positive_i32_arg("width", width)?;
+    let height = positive_i32_arg("height", height)?;
+
     thumbnail_manager
-        .update_rect(&panel_id, x as i32, y as i32, width as i32, height as i32)
+        .update_rect(&panel_id, x, y, width, height)
         .map_err(|e| e.to_string())
 }
 
