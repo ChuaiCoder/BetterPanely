@@ -234,8 +234,9 @@ export function WorkbenchCanvas() {
     title: string,
     initialPosition?: PanelInitialPosition
   ): Promise<PanelState | null> => {
+    let panelId: string | null = null;
     try {
-      const panelId = await addThumbnail(hwnd);
+      panelId = await addThumbnail(hwnd);
       const width = 200;
       const height = 150;
       const position = getPanelInitialPosition(width, height, initialPosition);
@@ -256,6 +257,13 @@ export function WorkbenchCanvas() {
       setPanels((prev) => [...prev, newPanel]);
       return newPanel;
     } catch (e) {
+      if (panelId) {
+        try {
+          await removePanel(panelId);
+        } catch (cleanupError) {
+          console.error("Failed to clean up thumbnail after add failure:", cleanupError);
+        }
+      }
       console.error("Failed to add thumbnail:", e);
       showNotice(t("app.toast.addThumbnailFailed", { reason: errorMessage(e) }));
       return null;

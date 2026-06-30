@@ -111,6 +111,8 @@ class TestWorkbenchRuntimeShape:
         assert "THUMBNAIL_HEALTH_INTERVAL_MS = 30000" in canvas_tsx
         assert "source window is no longer available" in canvas_tsx
         assert "thumb:source-closed" not in workbench_api
+        assert "let panelId: string | null = null;" in canvas_tsx
+        assert "panelId = await addThumbnail(hwnd)" in canvas_tsx
         assert "const rect = getThumbnailRect(newPanel)" in canvas_tsx
         assert (
             "await updateThumbnailRect(newPanel.id, rect.x, rect.y, rect.width, rect.height)"
@@ -120,6 +122,9 @@ class TestWorkbenchRuntimeShape:
         assert canvas_tsx.index("await updateThumbnailRect(newPanel.id") < canvas_tsx.index(
             "setPanels((prev) => [...prev, newPanel])"
         )
+        assert "if (panelId)" in canvas_tsx
+        assert "await removePanel(panelId)" in canvas_tsx
+        assert "Failed to clean up thumbnail after add failure" in canvas_tsx
 
     def test_add_panel_dialog_blocks_incompatible_windows(self, repo_root):
         dialog_tsx = (repo_root / "src/components/AddPanelDialog.tsx").read_text(
