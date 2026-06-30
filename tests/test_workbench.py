@@ -389,11 +389,32 @@ class TestWorkbenchRuntimeShape:
         assert "const panel = panels().find((p) => p.id === panelId)" in close_block
         assert 'if (panel?.type === "thumbnail")' in close_block
         assert "await removePanel(panelId)" in close_block
+        assert "removePanelState(panelId)" in close_block
         assert close_block.index('if (panel?.type === "thumbnail")') < close_block.index(
             "await removePanel(panelId)"
         )
         assert close_block.index("await removePanel(panelId)") < close_block.index(
-            "setPanels((prev) => prev.filter((p) => p.id !== panelId))"
+            "removePanelState(panelId)"
+        )
+
+    def test_thumbnail_close_removes_stale_frontend_panel(self, repo_root):
+        canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
+            encoding="utf-8"
+        )
+        close_block = canvas_tsx.split(
+            "const handleClosePanel = async", 1
+        )[1].split("const handleSelectPanel", 1)[0]
+
+        assert "const isStaleThumbnailError = (error: unknown)" in canvas_tsx
+        assert 'message.includes("source window is no longer available")' in canvas_tsx
+        assert 'message.includes("thumbnail not found")' in canvas_tsx
+        assert "const removePanelState = (panelId: string)" in canvas_tsx
+        assert "setDraggedExternalPanelId(null)" in canvas_tsx
+        assert "setPanels((prev) => prev.filter((p) => p.id !== panelId))" in canvas_tsx
+        assert "if (panel?.type === \"thumbnail\" && isStaleThumbnailError(e))" in close_block
+        assert "removePanelState(panel.id)" in close_block
+        assert close_block.index("isStaleThumbnailError(e)") < close_block.index(
+            "showNotice(t(\"app.toast.removePanelFailed\""
         )
 
     def test_workbench_user_errors_are_reported_as_toasts(self, repo_root):

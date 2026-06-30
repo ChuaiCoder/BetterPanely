@@ -94,6 +94,14 @@ export function WorkbenchCanvas() {
   const errorMessage = (error: unknown) =>
     error instanceof Error ? error.message : String(error);
 
+  const isStaleThumbnailError = (error: unknown) => {
+    const message = errorMessage(error).toLowerCase();
+    return (
+      message.includes("source window is no longer available") ||
+      message.includes("thumbnail not found")
+    );
+  };
+
   const showNotice = (message: string, type: WorkbenchNotice["type"] = "error") => {
     const id = Date.now() + noticeTimers.length;
     setNotices((prev) => [...prev, { id, type, message }]);
@@ -144,19 +152,23 @@ export function WorkbenchCanvas() {
     return x === panel.x && y === panel.y ? panel : { ...panel, x, y };
   };
 
+  const removePanelState = (panelId: string) => {
+    if (selectedPanelId() === panelId) {
+      setSelectedPanelId(null);
+    }
+    if (draggedExternalPanelId() === panelId) {
+      setDraggedExternalPanelId(null);
+    }
+    setPanels((prev) => prev.filter((p) => p.id !== panelId));
+  };
+
   const removeClosedSourcePanel = (panelId: string, sourceHwnd: number) => {
     const panel = panels().find(
       (p) => p.id === panelId || (p.type === "thumbnail" && p.sourceHwnd === sourceHwnd)
     );
     if (!panel) return;
 
-    if (selectedPanelId() === panel.id) {
-      setSelectedPanelId(null);
-    }
-    if (draggedExternalPanelId() === panel.id) {
-      setDraggedExternalPanelId(null);
-    }
-    setPanels((prev) => prev.filter((p) => p.id !== panel.id));
+    removePanelState(panel.id);
     showNotice(t("app.toast.sourceClosed", { title: panel.title }), "info");
   };
 
@@ -167,11 +179,7 @@ export function WorkbenchCanvas() {
       await updateThumbnailRect(panel.id, rect.x, rect.y, rect.width, rect.height);
       return true;
     } catch (e) {
-      const message = String(e).toLowerCase();
-      if (
-        message.includes("source window is no longer available") ||
-        message.includes("thumbnail not found")
-      ) {
+      if (isStaleThumbnailError(e)) {
         removeClosedSourcePanel(panel.id, panel.sourceHwnd);
         return false;
       }
@@ -312,11 +320,12 @@ export function WorkbenchCanvas() {
       if (panel?.type === "thumbnail") {
         await removePanel(panelId);
       }
-      setPanels((prev) => prev.filter((p) => p.id !== panelId));
-      if (selectedPanelId() === panelId) {
-        setSelectedPanelId(null);
-      }
+      removePanelState(panelId);
     } catch (e) {
+      if (panel?.type === "thumbnail" && isStaleThumbnailError(e)) {
+        removePanelState(panel.id);
+        return;
+      }
       console.error("Failed to remove panel:", e);
       showNotice(t("app.toast.removePanelFailed", { reason: errorMessage(e) }));
     }
