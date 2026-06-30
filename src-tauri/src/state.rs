@@ -3,6 +3,12 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
+const DEFAULT_PANEL_POSITION: f64 = 100.0;
+const DEFAULT_PANEL_TITLE: &str = "Untitled";
+const DEFAULT_PANEL_Z_INDEX: i32 = 1;
+const MIN_PANEL_WIDTH: f64 = 80.0;
+const MIN_PANEL_HEIGHT: f64 = 64.0;
+
 /// Persisted application state
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct PersistedState {
@@ -25,6 +31,88 @@ pub struct SavedPanel {
     pub width: f64,
     pub height: f64,
     pub z_index: i32,
+}
+
+fn string_field(value: &serde_json::Value, key: &str) -> Option<String> {
+    value
+        .get(key)?
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn finite_number_field(value: &serde_json::Value, key: &str) -> Option<f64> {
+    let number = value.get(key)?.as_f64()?;
+    number.is_finite().then_some(number)
+}
+
+fn panel_dimension_field(value: &serde_json::Value, key: &str, min: f64) -> Option<f64> {
+    let number = finite_number_field(value, key)?;
+    (number >= min).then_some(number)
+}
+
+fn positive_isize_field(value: &serde_json::Value, key: &str) -> Option<isize> {
+    let number = value.get(key)?.as_i64()?;
+    if number > 0 && number <= isize::MAX as i64 {
+        Some(number as isize)
+    } else {
+        None
+    }
+}
+
+fn z_index_field(value: &serde_json::Value) -> i32 {
+    value
+        .get("z_index")
+        .and_then(serde_json::Value::as_i64)
+        .and_then(|number| i32::try_from(number).ok())
+        .filter(|number| *number >= 0)
+        .unwrap_or(DEFAULT_PANEL_Z_INDEX)
+}
+
+fn parse_saved_panel(value: &serde_json::Value) -> Option<SavedPanel> {
+    let id = string_field(value, "id")?;
+    let panel_type = string_field(value, "panel_type")?;
+    let title = string_field(value, "title").unwrap_or_else(|| DEFAULT_PANEL_TITLE.into());
+    let x = finite_number_field(value, "x").unwrap_or(DEFAULT_PANEL_POSITION);
+    let y = finite_number_field(value, "y").unwrap_or(DEFAULT_PANEL_POSITION);
+    let width = panel_dimension_field(value, "width", MIN_PANEL_WIDTH)?;
+    let height = panel_dimension_field(value, "height", MIN_PANEL_HEIGHT)?;
+    let z_index = z_index_field(value);
+
+    match panel_type.as_str() {
+        "thumbnail" => {
+            let source_hwnd = positive_isize_field(value, "source_hwnd")?;
+            Some(SavedPanel {
+                id,
+                panel_type,
+                source_hwnd: Some(source_hwnd),
+                tool_id: None,
+                title,
+                x,
+                y,
+                width,
+                height,
+                z_index,
+            })
+        }
+        "tool" => {
+            let tool_id = string_field(value, "tool_id")?;
+            Some(SavedPanel {
+                id,
+                panel_type,
+                source_hwnd: None,
+                tool_id: Some(tool_id),
+                title,
+                x,
+                y,
+                width,
+                height,
+                z_index,
+            })
+        }
+        _ => None,
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -215,7 +303,35 @@ pub fn load_layout(app: AppHandle) -> Result<Vec<SavedPanel>, Box<dyn std::error
     }
 
     let json = fs::read_to_string(&layout_path)?;
-    let panels: Vec<SavedPanel> = serde_json::from_str(&json)?;
+    let raw_panels: Vec<serde_json::Value> = match serde_json::from_str(&json) {
+        Ok(panels) => panels,
+        Err(error) => {
+            log::warn!(
+                "Ignoring invalid workbench layout at {:?}: {}",
+                layout_path,
+                error
+            );
+            return Ok(vec![]);
+        }
+    };
+
+    let mut skipped = 0;
+    let mut panels = Vec::with_capacity(raw_panels.len());
+    for raw_panel in raw_panels {
+        if let Some(panel) = parse_saved_panel(&raw_panel) {
+            panels.push(panel);
+        } else {
+            skipped += 1;
+        }
+    }
+
+    if skipped > 0 {
+        log::warn!(
+            "Skipped {} invalid panels while loading workbench layout from {:?}",
+            skipped,
+            layout_path
+        );
+    }
 
     log::info!("Loaded {} panels from workbench layout", panels.len());
     Ok(panels)

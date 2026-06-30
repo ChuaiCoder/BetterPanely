@@ -251,6 +251,8 @@ class TestWorkbenchRuntimeShape:
         root_pytest_ini = (repo_root / "pytest.ini").read_text(encoding="utf-8")
 
         assert "wait_for_process_window(proc.pid" in conftest_py
+        assert "wait_for_process_window(app_process.pid" in conftest_py
+        assert "wait_for_window(" not in conftest_py
         assert 'w["pid"] == proc.pid' in conftest_py
         assert "QueryFullProcessImageNameW" in win32_helper
         assert "better-panely.exe" in win32_helper
@@ -464,6 +466,38 @@ class TestWorkbenchPersistenceShape:
         assert 'invoke<WindowInfoRaw | null>("wb_capture_focused_window")' in workbench_api
         assert "wb_capture_window_under_cursor" not in workbench_api
         assert "openToolWindow" in canvas_tsx
+
+    def test_saved_layout_deserialization_rejects_invalid_panel_data(self, repo_root):
+        state_rs = (repo_root / "src-tauri/src/state.rs").read_text(encoding="utf-8")
+        workbench_api = (repo_root / "src/lib/workbench-api.ts").read_text(
+            encoding="utf-8"
+        )
+
+        assert "parse_saved_panel" in state_rs
+        assert "serde_json::Value" in state_rs
+        assert 'match panel_type.as_str()' in state_rs
+        assert '"thumbnail" => {' in state_rs
+        assert '"tool" => {' in state_rs
+        assert 'positive_isize_field(value, "source_hwnd")?' in state_rs
+        assert 'string_field(value, "tool_id")?' in state_rs
+        assert "panel_dimension_field(value, \"width\", MIN_PANEL_WIDTH)?" in state_rs
+        assert "panel_dimension_field(value, \"height\", MIN_PANEL_HEIGHT)?" in state_rs
+        assert ".filter(|number| *number >= 0)" in state_rs
+        assert "Ignoring invalid workbench layout" in state_rs
+        assert "Skipped {} invalid panels" in state_rs
+
+        assert "function mapSavedPanel(raw: unknown): PanelState | null" in workbench_api
+        assert "function isPanelType(value: unknown): value is PanelType" in workbench_api
+        assert 'value === "thumbnail" || value === "tool"' in workbench_api
+        assert "panelDimensionField(raw, \"width\", MIN_PANEL_WIDTH)" in workbench_api
+        assert "panelDimensionField(raw, \"height\", MIN_PANEL_HEIGHT)" in workbench_api
+        assert "positiveNumberField(raw, \"source_hwnd\")" in workbench_api
+        assert "value === null || value < 0" in workbench_api
+        assert "VALID_TOOL_IDS.has(toolId)" in workbench_api
+        assert "invoke<unknown>(\"wb_load_layout\")" in workbench_api
+        assert "Array.isArray(result)" in workbench_api
+        assert ".filter((panel): panel is PanelState => panel !== null)" in workbench_api
+        assert 'as "thumbnail" | "tool"' not in workbench_api
 
     def test_settings_window_has_capability_and_camel_case_contract(self, repo_root):
         capabilities = (

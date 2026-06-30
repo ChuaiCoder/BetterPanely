@@ -1,6 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { PanelState, WindowInfo } from "./types";
 
+type PanelType = PanelState["type"];
+
+const DEFAULT_PANEL_POSITION = 100;
+const DEFAULT_PANEL_TITLE = "Untitled";
+const DEFAULT_PANEL_Z_INDEX = 1;
+const MIN_PANEL_WIDTH = 80;
+const MIN_PANEL_HEIGHT = 64;
+const VALID_TOOL_IDS = new Set(["calculator", "notes", "timer", "weather"]);
+
 type WindowInfoRaw = {
   hwnd: number;
   title: string;
@@ -93,6 +102,76 @@ export async function getWorkbenchHwnd(): Promise<number> {
   return invoke("wb_get_workbench_hwnd");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function stringField(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function finiteNumberField(record: Record<string, unknown>, key: string): number | null {
+  const value = record[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function panelDimensionField(
+  record: Record<string, unknown>,
+  key: string,
+  min: number
+): number | null {
+  const value = finiteNumberField(record, key);
+  return value !== null && value >= min ? value : null;
+}
+
+function positiveNumberField(record: Record<string, unknown>, key: string): number | null {
+  const value = finiteNumberField(record, key);
+  return value !== null && value > 0 ? value : null;
+}
+
+function zIndexField(record: Record<string, unknown>): number {
+  const value = finiteNumberField(record, "z_index");
+  return value === null || value < 0 ? DEFAULT_PANEL_Z_INDEX : Math.trunc(value);
+}
+
+function isPanelType(value: unknown): value is PanelType {
+  return value === "thumbnail" || value === "tool";
+}
+
+function mapSavedPanel(raw: unknown): PanelState | null {
+  if (!isRecord(raw)) return null;
+
+  const id = stringField(raw, "id");
+  const panelType = stringField(raw, "panel_type");
+  const width = panelDimensionField(raw, "width", MIN_PANEL_WIDTH);
+  const height = panelDimensionField(raw, "height", MIN_PANEL_HEIGHT);
+
+  if (!id || !isPanelType(panelType) || width === null || height === null) {
+    return null;
+  }
+
+  const basePanel = {
+    id,
+    type: panelType,
+    title: stringField(raw, "title") ?? DEFAULT_PANEL_TITLE,
+    x: finiteNumberField(raw, "x") ?? DEFAULT_PANEL_POSITION,
+    y: finiteNumberField(raw, "y") ?? DEFAULT_PANEL_POSITION,
+    width,
+    height,
+    zIndex: zIndexField(raw),
+    visible: true,
+  };
+
+  if (panelType === "thumbnail") {
+    const sourceHwnd = positiveNumberField(raw, "source_hwnd");
+    return sourceHwnd === null ? null : { ...basePanel, sourceHwnd };
+  }
+
+  const toolId = stringField(raw, "tool_id");
+  return toolId && VALID_TOOL_IDS.has(toolId) ? { ...basePanel, toolId } : null;
+}
+
 /**
  * Open a built-in tool as a standalone utility window.
  * @param toolId Built-in tool ID
@@ -126,30 +205,13 @@ export async function saveLayout(panels: PanelState[]): Promise<void> {
  * @returns 保存的面板状态列表
  */
 export async function loadLayout(): Promise<PanelState[]> {
-  const result = await invoke<Array<{
-    id: string;
-    panel_type: string;
-    source_hwnd: number | null;
-    tool_id: string | null;
-    title: string;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    z_index: number;
-  }>>("wb_load_layout");
+  const result = await invoke<unknown>("wb_load_layout");
+  if (!Array.isArray(result)) {
+    console.warn("Ignoring invalid workbench layout payload:", result);
+    return [];
+  }
 
-  return result.map((p) => ({
-    id: p.id,
-    type: p.panel_type as "thumbnail" | "tool",
-    sourceHwnd: p.source_hwnd ?? undefined,
-    toolId: p.tool_id ?? undefined,
-    title: p.title,
-    x: p.x,
-    y: p.y,
-    width: p.width,
-    height: p.height,
-    zIndex: p.z_index,
-    visible: true,
-  }));
+  return result
+    .map(mapSavedPanel)
+    .filter((panel): panel is PanelState => panel !== null);
 }

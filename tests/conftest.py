@@ -61,7 +61,7 @@ def app_process():
 @pytest.fixture(scope="function")
 def main_window(app_process):
     """Ensure the main BetterPanely window is visible."""
-    win = wait_for_window("BetterPanely", timeout=5)
+    win = wait_for_process_window(app_process.pid, title_contains="BetterPanely", timeout=5)
     assert win is not None, "Main window not found"
     return win
 
