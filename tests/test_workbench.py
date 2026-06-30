@@ -323,6 +323,26 @@ class TestWorkbenchRuntimeShape:
         assert "app.toast.openToolFailed" in en_locale
         assert "app.toast.openToolFailed" in zh_locale
 
+    def test_unknown_tool_ids_do_not_create_blank_tool_panels(self, repo_root):
+        canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
+            encoding="utf-8"
+        )
+        add_tool_block = canvas_tsx.split(
+            "const addToolPanel = (toolId: string) =>", 1
+        )[1].split("const handleAddThumbnails", 1)[0]
+
+        assert "const TOOL_CONFIG: Record<string, { width: number; height: number }>" in canvas_tsx
+        assert "const config = TOOL_CONFIG[toolId]" in add_tool_block
+        assert "if (!config)" in add_tool_block
+        assert 'console.warn("Ignored unknown tool:", toolId)' in add_tool_block
+        assert 't("error.unknownTool", { toolId })' in add_tool_block
+        assert "return;" in add_tool_block
+        assert '|| { width: 300, height: 300 }' not in add_tool_block
+        assert "setPanels((prev) => [...prev, newPanel])" in add_tool_block
+        assert add_tool_block.index("if (!config)") < add_tool_block.index(
+            "const newPanel: PanelState"
+        )
+
     def test_e2e_window_cleanup_is_process_scoped(self, repo_root):
         conftest_py = (repo_root / "tests/conftest.py").read_text(encoding="utf-8")
         win32_helper = (

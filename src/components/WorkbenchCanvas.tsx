@@ -21,6 +21,12 @@ import type { PanelState, SnapGuide, WindowInfo } from "../lib/types";
 const PANEL_HEADER_HEIGHT = 32;
 const NOTICE_TIMEOUT_MS = 5000;
 const THUMBNAIL_HEALTH_INTERVAL_MS = 30000;
+const TOOL_CONFIG: Record<string, { width: number; height: number }> = {
+  calculator: { width: 280, height: 420 },
+  notes: { width: 350, height: 400 },
+  timer: { width: 300, height: 200 },
+  weather: { width: 300, height: 350 },
+};
 
 interface WorkbenchNotice {
   id: number;
@@ -286,13 +292,12 @@ export function WorkbenchCanvas() {
   };
 
   const addToolPanel = (toolId: string) => {
-    const toolConfig: Record<string, { width: number; height: number }> = {
-      calculator: { width: 280, height: 420 },
-      notes: { width: 350, height: 400 },
-      timer: { width: 300, height: 200 },
-      weather: { width: 300, height: 350 },
-    };
-    const config = toolConfig[toolId] || { width: 300, height: 300 };
+    const config = TOOL_CONFIG[toolId];
+    if (!config) {
+      console.warn("Ignored unknown tool:", toolId);
+      showNotice(t("app.toast.openToolFailed", { reason: t("error.unknownTool", { toolId }) }));
+      return;
+    }
 
     const newPanel: PanelState = {
       id: `tool_${toolId}_${Date.now()}`,
