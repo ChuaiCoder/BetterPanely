@@ -558,6 +558,25 @@ class TestWorkbenchPersistenceShape:
         assert ".filter((panel): panel is PanelState => panel !== null)" in workbench_api
         assert 'as "thumbnail" | "tool"' not in workbench_api
 
+    def test_settings_deserialization_defaults_missing_fields(self, repo_root):
+        state_rs = (repo_root / "src-tauri/src/state.rs").read_text(encoding="utf-8")
+
+        assert 'default = "default_launch_on_startup"' in state_rs
+        assert 'default = "default_minimize_to_tray"' in state_rs
+        assert 'default = "default_theme"' in state_rs
+        assert 'default = "default_capture_hotkey"' in state_rs
+        assert 'default = "default_language"' in state_rs
+        assert "fn default_launch_on_startup() -> bool" in state_rs
+        assert "fn default_minimize_to_tray() -> bool" in state_rs
+        assert "fn default_theme() -> String" in state_rs
+        assert "fn default_capture_hotkey() -> String" in state_rs
+        assert "fn default_language() -> String" in state_rs
+        assert "launch_on_startup: default_launch_on_startup()" in state_rs
+        assert "minimize_to_tray: default_minimize_to_tray()" in state_rs
+        assert "theme: default_theme()" in state_rs
+        assert "capture_hotkey: default_capture_hotkey()" in state_rs
+        assert "language: default_language()" in state_rs
+
     def test_settings_window_has_capability_and_camel_case_contract(self, repo_root):
         capabilities = (
             repo_root / "src-tauri/capabilities/default.json"

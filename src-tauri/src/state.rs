@@ -118,26 +118,48 @@ fn parse_saved_panel(value: &serde_json::Value) -> Option<SavedPanel> {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
-    #[serde(alias = "launch_on_startup")]
+    #[serde(default = "default_launch_on_startup", alias = "launch_on_startup")]
     pub launch_on_startup: bool,
-    #[serde(alias = "minimize_to_tray")]
+    #[serde(default = "default_minimize_to_tray", alias = "minimize_to_tray")]
     pub minimize_to_tray: bool,
+    #[serde(default = "default_theme")]
     pub theme: String,
-    #[serde(alias = "capture_hotkey")]
+    #[serde(default = "default_capture_hotkey", alias = "capture_hotkey")]
     pub capture_hotkey: String,
+    #[serde(default = "default_language")]
     pub language: String,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            launch_on_startup: false,
-            minimize_to_tray: true,
-            theme: "dark".into(),
-            capture_hotkey: "Ctrl+Shift+W".into(),
-            language: "en".into(),
+            launch_on_startup: default_launch_on_startup(),
+            minimize_to_tray: default_minimize_to_tray(),
+            theme: default_theme(),
+            capture_hotkey: default_capture_hotkey(),
+            language: default_language(),
         }
     }
+}
+
+fn default_launch_on_startup() -> bool {
+    false
+}
+
+fn default_minimize_to_tray() -> bool {
+    true
+}
+
+fn default_theme() -> String {
+    "dark".into()
+}
+
+fn default_capture_hotkey() -> String {
+    "Ctrl+Shift+W".into()
+}
+
+fn default_language() -> String {
+    "en".into()
 }
 
 impl AppSettings {
