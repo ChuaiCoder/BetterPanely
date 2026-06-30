@@ -251,8 +251,9 @@ export function WorkbenchCanvas() {
         zIndex: getNextZIndex(),
         visible: true,
       };
+      const rect = getThumbnailRect(newPanel);
+      await updateThumbnailRect(newPanel.id, rect.x, rect.y, rect.width, rect.height);
       setPanels((prev) => [...prev, newPanel]);
-      await syncThumbnailRect(newPanel);
       return newPanel;
     } catch (e) {
       console.error("Failed to add thumbnail:", e);
