@@ -222,6 +222,27 @@ class TestWorkbenchRuntimeShape:
         assert "K32GetModuleFileNameExW" not in enumerator_rs
         assert "PROCESS_VM_READ" not in enumerator_rs
 
+    def test_add_panel_dialog_ignores_stale_window_enumeration(self, repo_root):
+        dialog_tsx = (repo_root / "src/components/AddPanelDialog.tsx").read_text(
+            encoding="utf-8"
+        )
+        effect_block = dialog_tsx.split("createEffect(() => {", 1)[1].split(
+            "const filteredWindows = () =>", 1
+        )[0]
+
+        assert "let enumerateRequestId = 0" in dialog_tsx
+        assert "const requestId = ++enumerateRequestId" in effect_block
+        assert "setWindows([])" in effect_block
+        assert "if (!props.isOpen)" in effect_block
+        assert "if (requestId !== enumerateRequestId || !props.isOpen) return;" in effect_block
+        assert effect_block.index("setWindows([])") < effect_block.index("enumerateWindows()")
+        assert effect_block.index("if (requestId !== enumerateRequestId") < effect_block.index(
+            "setWindows(windowList)"
+        )
+        assert effect_block.index("if (requestId !== enumerateRequestId") < effect_block.index(
+            "props.onError?.(error)"
+        )
+
     def test_panel_drag_starts_from_header_and_thumbnail_content_focuses(self, repo_root):
         thumb_panel = (repo_root / "src/components/ThumbPanel.tsx").read_text(
             encoding="utf-8"

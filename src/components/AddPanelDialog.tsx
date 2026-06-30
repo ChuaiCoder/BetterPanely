@@ -27,18 +27,28 @@ export function AddPanelDialog(props: AddPanelDialogProps) {
   const [windows, setWindows] = createSignal<WindowInfo[]>([]);
   const [selectedHwnds, setSelectedHwnds] = createSignal<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = createSignal("");
+  let enumerateRequestId = 0;
 
   createEffect(() => {
-    if (props.isOpen) {
-      enumerateWindows()
-        .then(setWindows)
-        .catch((error) => {
-          console.error("Failed to enumerate windows:", error);
-          props.onError?.(error);
-        });
-      setSelectedHwnds(new Set<number>());
-      setSearchQuery("");
+    const requestId = ++enumerateRequestId;
+    setSelectedHwnds(new Set<number>());
+    setSearchQuery("");
+    setWindows([]);
+
+    if (!props.isOpen) {
+      return;
     }
+
+    enumerateWindows()
+      .then((windowList) => {
+        if (requestId !== enumerateRequestId || !props.isOpen) return;
+        setWindows(windowList);
+      })
+      .catch((error) => {
+        if (requestId !== enumerateRequestId || !props.isOpen) return;
+        console.error("Failed to enumerate windows:", error);
+        props.onError?.(error);
+      });
   });
 
   const filteredWindows = () => {
