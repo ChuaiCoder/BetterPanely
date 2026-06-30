@@ -32,6 +32,7 @@
   "app.toast.focusFailed": "聚焦源窗口失败: {reason}",
   "app.toast.layoutSaved": "布局已保存",
   "app.toast.loadLayoutFailed": "加载已保存布局失败: {reason}",
+  "app.toast.openSettingsFailed": "打开设置失败: {reason}",
   "app.toast.openToolFailed": "打开工具窗口失败: {reason}",
   "app.toast.removePanelFailed": "移除面板失败: {reason}",
   "app.toast.saveLayoutFailed": "保存布局失败: {reason}",

@@ -560,6 +560,15 @@ export function WorkbenchCanvas() {
     saveCurrentLayout();
   };
 
+  const handleOpenSettings = async () => {
+    try {
+      await invoke("open_settings");
+    } catch (error) {
+      console.error("Failed to open settings:", error);
+      showNotice(t("app.toast.openSettingsFailed", { reason: errorMessage(error) }));
+    }
+  };
+
   const handleMouseUp = async () => {
     if (!draggingId()) return;
 
@@ -784,7 +793,7 @@ export function WorkbenchCanvas() {
       <header class="workbench-header">
         <h1>{t("app.title")}</h1>
         <div class="header-actions">
-          <button class="btn btn-secondary btn-small" onClick={() => invoke("open_settings")}>
+          <button class="btn btn-secondary btn-small" onClick={() => void handleOpenSettings()}>
             ⚙
           </button>
           <button class="btn btn-primary" onClick={() => setIsDialogOpen(true)}>

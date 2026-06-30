@@ -467,6 +467,7 @@ class TestWorkbenchRuntimeShape:
         assert "app.toast.focusFailed" in canvas_tsx
         assert "app.toast.layoutSaved" in canvas_tsx
         assert "app.toast.loadLayoutFailed" in canvas_tsx
+        assert "app.toast.openSettingsFailed" in canvas_tsx
         assert "app.toast.openToolFailed" in canvas_tsx
         assert "app.toast.removePanelFailed" in canvas_tsx
         assert "app.toast.eventListenerFailed" in canvas_tsx
@@ -486,6 +487,8 @@ class TestWorkbenchRuntimeShape:
         assert "app.toast.addThumbnailFailed" in zh_locale
         assert "app.toast.enumerateWindowsFailed" in en_locale
         assert "app.toast.enumerateWindowsFailed" in zh_locale
+        assert "app.toast.openSettingsFailed" in en_locale
+        assert "app.toast.openSettingsFailed" in zh_locale
         assert "app.toast.openToolFailed" in en_locale
         assert "app.toast.openToolFailed" in zh_locale
         assert "app.toast.eventListenerFailed" in en_locale
@@ -510,6 +513,29 @@ class TestWorkbenchRuntimeShape:
         assert 'handleEventListenerError("drag:ended-workbench", error)' in canvas_tsx
         assert "const unlistenNewPanel = await listen" not in canvas_tsx
         assert "addCleanup(await listen" in canvas_tsx
+
+    def test_settings_button_reports_open_failures(self, repo_root):
+        canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
+            encoding="utf-8"
+        )
+        en_locale = (repo_root / "src/lib/locales/en.json").read_text(
+            encoding="utf-8"
+        )
+        zh_locale = (repo_root / "src/lib/locales/zh.json").read_text(
+            encoding="utf-8"
+        )
+        settings_handler = canvas_tsx.split(
+            "const handleOpenSettings = async () =>", 1
+        )[1].split("const handleMouseUp", 1)[0]
+
+        assert "await invoke(\"open_settings\")" in settings_handler
+        assert 'console.error("Failed to open settings:", error)' in settings_handler
+        assert "app.toast.openSettingsFailed" in settings_handler
+        assert "{ reason: errorMessage(error) }" in settings_handler
+        assert 'onClick={() => void handleOpenSettings()}' in canvas_tsx
+        assert 'onClick={() => invoke("open_settings")}' not in canvas_tsx
+        assert "app.toast.openSettingsFailed" in en_locale
+        assert "app.toast.openSettingsFailed" in zh_locale
 
     def test_workbench_layout_save_failures_are_reported_without_autosave_spam(self, repo_root):
         canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(

@@ -32,6 +32,7 @@
   "app.toast.focusFailed": "Failed to focus source window: {reason}",
   "app.toast.layoutSaved": "Layout saved",
   "app.toast.loadLayoutFailed": "Failed to load saved layout: {reason}",
+  "app.toast.openSettingsFailed": "Failed to open settings: {reason}",
   "app.toast.openToolFailed": "Failed to open tool window: {reason}",
   "app.toast.removePanelFailed": "Failed to remove panel: {reason}",
   "app.toast.saveLayoutFailed": "Failed to save layout: {reason}",
