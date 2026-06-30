@@ -2,6 +2,17 @@ use crate::state::AppSettings;
 use crate::AppState;
 use tauri::{command, AppHandle, Emitter, Manager, State};
 
+pub fn settings_window_title(lang: &str) -> &'static str {
+    crate::locales::t("menu.settings", lang)
+}
+
+fn refresh_localized_window_titles(app_handle: &AppHandle, lang: &str) {
+    if let Some(window) = app_handle.get_webview_window("settings_window") {
+        let _ = window.set_title(settings_window_title(lang));
+    }
+    crate::commands::workbench_cmds::refresh_tool_window_titles(app_handle, lang);
+}
+
 /// Get the full application settings
 #[command]
 pub async fn get_settings(state: State<'_, AppState>) -> Result<AppSettings, String> {
@@ -75,6 +86,7 @@ pub async fn set_settings(
         {
             log::warn!("Failed to refresh tray language: {}", error);
         }
+        refresh_localized_window_titles(&app_handle, &saved_settings.language);
         let _ = app_handle.emit("language-changed", &saved_settings.language);
         log::info!("Language changed to: {}", saved_settings.language);
     }
@@ -111,6 +123,7 @@ pub async fn set_language(
         log::warn!("Failed to refresh tray language: {}", error);
     }
 
+    refresh_localized_window_titles(&app_handle, &new_lang);
     let _ = app_handle.emit("language-changed", &new_lang);
     let _ = app_handle.emit("settings-changed", &saved_settings);
     log::info!("Language changed to: {}", new_lang);
@@ -129,15 +142,17 @@ pub async fn open_settings(
 
     let url = format!("src/tools/settings/index.html#lang={}", lang);
     let label = "settings_window";
+    let title = settings_window_title(&lang);
 
     if let Some(window) = app_handle.get_webview_window(label) {
+        let _ = window.set_title(title);
         let _ = window.show();
         let _ = window.set_focus();
         return Ok(());
     }
 
     tauri::WebviewWindowBuilder::new(&app_handle, label, tauri::WebviewUrl::App(url.into()))
-        .title("Settings")
+        .title(title)
         .inner_size(420.0, 520.0)
         .center()
         .decorations(true)

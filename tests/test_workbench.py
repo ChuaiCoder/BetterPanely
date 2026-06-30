@@ -185,8 +185,11 @@ class TestWorkbenchRuntimeShape:
 
         assert "wb_open_tool_window" in workbench_cmds
         assert "tool_window_config" in workbench_cmds
+        assert "refresh_tool_window_titles" in workbench_cmds
         assert "WebviewWindowBuilder::new" in workbench_cmds
         assert "tool_{}_window" in workbench_cmds
+        assert "window.set_title(crate::locales::t(config.title_key, lang))" in workbench_cmds
+        assert "window.set_title(crate::locales::t(config.title_key, &lang))" in workbench_cmds
         assert "openToolWindow(toolId: string)" in workbench_api
         assert 'invoke("wb_open_tool_window"' in workbench_api
         assert "openToolWindow(panel.toolId)" in canvas_tsx
@@ -496,6 +499,19 @@ class TestWorkbenchPersistenceShape:
             in settings_cmds
         )
         assert "crate::tray::refresh_tray_language(&app_handle, &new_lang)" in settings_cmds
+        assert "settings_window_title" in settings_cmds
+        assert "refresh_localized_window_titles" in settings_cmds
+        assert 'crate::locales::t("menu.settings", lang)' in settings_cmds
+        assert "window.set_title(settings_window_title(lang))" in settings_cmds
+        assert "refresh_tool_window_titles(app_handle, lang)" in settings_cmds
+        assert "refresh_localized_window_titles(&app_handle, &saved_settings.language)" in settings_cmds
+        assert "refresh_localized_window_titles(&app_handle, &new_lang)" in settings_cmds
+        assert ".title(title)" in settings_cmds
+        assert '.title("Settings")' not in settings_cmds
+        assert "settings_cmds::settings_window_title(&lang)" in tray_rs
+        assert "w.set_title(title)" in tray_rs
+        assert ".title(title)" in tray_rs
+        assert '.title("Settings")' not in tray_rs
         assert "register_capture_hotkey(app.handle(), &capture_hotkey)" in lib_rs
         assert "ShortcutState::Pressed" in hotkeys_rs
         assert ".unregister(old_hotkey)" in hotkeys_rs

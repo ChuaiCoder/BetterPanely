@@ -89,6 +89,18 @@ fn tool_window_config(tool_id: &str) -> Option<ToolWindowConfig> {
     }
 }
 
+pub fn refresh_tool_window_titles(app: &AppHandle, lang: &str) {
+    for tool_id in ["calculator", "notes", "timer", "weather"] {
+        let Some(config) = tool_window_config(tool_id) else {
+            continue;
+        };
+        let label = format!("tool_{}_window", tool_id);
+        if let Some(window) = app.get_webview_window(&label) {
+            let _ = window.set_title(crate::locales::t(config.title_key, lang));
+        }
+    }
+}
+
 #[tauri::command]
 pub fn wb_enumerate_windows() -> Result<Vec<WindowInfo>, String> {
     #[cfg(target_os = "windows")]
@@ -225,6 +237,7 @@ pub fn wb_open_tool_window(
 
     let label = format!("tool_{}_window", tool_id);
     if let Some(window) = app.get_webview_window(&label) {
+        let _ = window.set_title(crate::locales::t(config.title_key, &lang));
         let _ = window.show();
         let _ = window.set_focus();
         return Ok(());
