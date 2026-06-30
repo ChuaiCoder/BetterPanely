@@ -531,12 +531,21 @@ export function WorkbenchCanvas() {
 
       if (!panel.sourceHwnd) continue;
 
+      let panelId: string | null = null;
       try {
-        const panelId = await addThumbnail(panel.sourceHwnd);
+        panelId = await addThumbnail(panel.sourceHwnd);
         const restoredPanel = { ...panel, id: panelId, visible: true };
+        const rect = getThumbnailRect(restoredPanel);
+        await updateThumbnailRect(restoredPanel.id, rect.x, rect.y, rect.width, rect.height);
         restored.push(restoredPanel);
-        await syncThumbnailRect(restoredPanel);
       } catch (e) {
+        if (panelId) {
+          try {
+            await removePanel(panelId);
+          } catch (cleanupError) {
+            console.error("Failed to clean up restored thumbnail:", cleanupError);
+          }
+        }
         console.warn("Skipped stale thumbnail panel:", panel.title, e);
         showNotice(t("app.toast.stalePanelSkipped", { title: panel.title }), "info");
       }

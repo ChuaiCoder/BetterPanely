@@ -432,12 +432,26 @@ class TestWorkbenchPersistenceShape:
         workbench_api = (repo_root / "src/lib/workbench-api.ts").read_text(
             encoding="utf-8"
         )
+        restore_block = canvas_tsx.split(
+            "const restoreSavedPanels = async", 1
+        )[1].split("onMount", 1)[0]
 
         assert "./lib/settings-api" in main_tsx
         assert "./settings-api" in i18n_tsx
         assert "../lib/workbench-api" in canvas_tsx
         assert "saveLayout" in canvas_tsx
         assert "captureFocusedWindow" in canvas_tsx
+        assert "const restoredPanel = { ...panel, id: panelId, visible: true }" in restore_block
+        assert (
+            "await updateThumbnailRect(restoredPanel.id, rect.x, rect.y, rect.width, rect.height)"
+            in restore_block
+        )
+        assert restore_block.index("await updateThumbnailRect(restoredPanel.id") < restore_block.index(
+            "restored.push(restoredPanel)"
+        )
+        assert "await syncThumbnailRect(restoredPanel)" not in restore_block
+        assert "await removePanel(panelId)" in restore_block
+        assert "Failed to clean up restored thumbnail" in restore_block
         assert "captureWindowUnderCursor" not in canvas_tsx
         assert 'invoke<WindowInfoRaw | null>("wb_capture_focused_window")' in workbench_api
         assert "wb_capture_window_under_cursor" not in workbench_api
