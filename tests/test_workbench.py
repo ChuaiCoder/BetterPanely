@@ -487,6 +487,7 @@ class TestWorkbenchPersistenceShape:
             "let startup_changed = old_settings.launch_on_startup != settings.launch_on_startup"
             in settings_cmds
         )
+        assert "let old_settings = state_mgr.get_settings().clone();" in settings_cmds
         assert "apply_launch_on_startup(settings.launch_on_startup)" in settings_cmds
         assert "rollback_launch_on_startup(&old_settings, startup_changed)" in settings_cmds
         assert "apply_launch_on_startup(old_settings.launch_on_startup)" in settings_cmds
@@ -499,6 +500,10 @@ class TestWorkbenchPersistenceShape:
             in settings_cmds
         )
         assert "crate::tray::refresh_tray_language(&app_handle, &new_lang)" in settings_cmds
+        assert "let lang = state_mgr.set_language(&lang)" in settings_cmds
+        assert "if let Err(error) = state_mgr.save_settings()" in settings_cmds
+        assert "state_mgr.set_settings(old_settings);" in settings_cmds
+        assert "return Err(error.to_string());" in settings_cmds
         assert "settings_window_title" in settings_cmds
         assert "refresh_localized_window_titles" in settings_cmds
         assert 'crate::locales::t("menu.settings", lang)' in settings_cmds

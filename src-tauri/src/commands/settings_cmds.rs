@@ -113,8 +113,12 @@ pub async fn set_language(
 ) -> Result<String, String> {
     let (new_lang, saved_settings) = {
         let mut state_mgr = state.state_manager.lock().map_err(|e| e.to_string())?;
+        let old_settings = state_mgr.get_settings().clone();
         let lang = state_mgr.set_language(&lang).map_err(|e| e.to_string())?;
-        state_mgr.save_settings().map_err(|e| e.to_string())?;
+        if let Err(error) = state_mgr.save_settings() {
+            state_mgr.set_settings(old_settings);
+            return Err(error.to_string());
+        }
         let saved_settings = state_mgr.get_settings().clone();
         (lang, saved_settings)
     };
