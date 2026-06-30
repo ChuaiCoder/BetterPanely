@@ -117,6 +117,9 @@ class TestWorkbenchRuntimeShape:
             encoding="utf-8"
         )
         app_css = (repo_root / "src/App.css").read_text(encoding="utf-8")
+        enumerator_rs = (
+            repo_root / "src-tauri/src/window_embedder/enumerator.rs"
+        ).read_text(encoding="utf-8")
         en_locale = (repo_root / "src/lib/locales/en.json").read_text(
             encoding="utf-8"
         )
@@ -138,6 +141,13 @@ class TestWorkbenchRuntimeShape:
         assert "window-incompatible-reason" in app_css
         assert "app.windowNotCapturable" in en_locale
         assert "app.windowNotCapturable" in zh_locale
+        assert "QueryFullProcessImageNameW" in enumerator_rs
+        assert "PROCESS_QUERY_LIMITED_INFORMATION, false, pid" in enumerator_rs
+        assert "PROCESS_NAME_FORMAT(0)" in enumerator_rs
+        assert "PWSTR(exe_buf.as_mut_ptr())" in enumerator_rs
+        assert "result.is_ok() && size > 0" in enumerator_rs
+        assert "K32GetModuleFileNameExW" not in enumerator_rs
+        assert "PROCESS_VM_READ" not in enumerator_rs
 
     def test_panel_drag_starts_from_header_and_thumbnail_content_focuses(self, repo_root):
         thumb_panel = (repo_root / "src/components/ThumbPanel.tsx").read_text(

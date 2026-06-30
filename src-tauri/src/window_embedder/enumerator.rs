@@ -1,5 +1,6 @@
 use serde::Serialize;
 use windows::{
+    core::PWSTR,
     Win32::UI::WindowsAndMessaging::*,
     Win32::System::Threading::*,
     Win32::Foundation::*,
@@ -220,24 +221,22 @@ unsafe fn get_process_path(pid: u32) -> Result<String, Box<dyn std::error::Error
     if pid == 0 {
         return Ok(String::new());
     }
-    // Try to open the process and get its image path
-    if let Ok(handle) = OpenProcess(
-        PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ,
-        false,
-        pid,
-    ) {
-        let mut exe_buf = [0u16; 260];
-        // Use K32GetModuleFileNameExW to get the process executable path
-        let result = windows::Win32::System::ProcessStatus::K32GetModuleFileNameExW(
+
+    // Module-read access rejects many otherwise capturable processes. Limited
+    // query access is enough for the executable path and keeps enumeration useful.
+    if let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
+        let mut exe_buf = [0u16; 32768];
+        let mut size = exe_buf.len() as u32;
+        let result = QueryFullProcessImageNameW(
             handle,
-            None,
-            &mut exe_buf,
+            PROCESS_NAME_FORMAT(0),
+            PWSTR(exe_buf.as_mut_ptr()),
+            &mut size,
         );
         let _ = CloseHandle(handle);
 
-        if result > 0 {
-            let len = result as usize;
-            return Ok(String::from_utf16_lossy(&exe_buf[..len]));
+        if result.is_ok() && size > 0 {
+            return Ok(String::from_utf16_lossy(&exe_buf[..size as usize]));
         }
     }
     Ok(String::new())
