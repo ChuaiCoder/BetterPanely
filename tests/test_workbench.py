@@ -214,6 +214,13 @@ class TestWorkbenchRuntimeShape:
         assert "window-incompatible-reason" in app_css
         assert "app.windowNotCapturable" in en_locale
         assert "app.windowNotCapturable" in zh_locale
+        assert "DwmGetWindowAttribute" in enumerator_rs
+        assert "DWMWA_CLOAKED" in enumerator_rs
+        assert "is_dwm_cloaked(hwnd)" in enumerator_rs
+        assert ".trim()" in enumerator_rs
+        assert "if title.is_empty()" in enumerator_rs
+        assert "title.is_empty() && !is_popup" not in enumerator_rs
+        assert "rect.right <= rect.left || rect.bottom <= rect.top" in enumerator_rs
         assert "QueryFullProcessImageNameW" in enumerator_rs
         assert "PROCESS_QUERY_LIMITED_INFORMATION, false, pid" in enumerator_rs
         assert "PROCESS_NAME_FORMAT(0)" in enumerator_rs

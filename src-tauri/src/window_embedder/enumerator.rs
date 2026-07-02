@@ -1,9 +1,10 @@
 use serde::Serialize;
 use windows::{
     core::PWSTR,
-    Win32::UI::WindowsAndMessaging::*,
-    Win32::System::Threading::*,
     Win32::Foundation::*,
+    Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED},
+    Win32::System::Threading::*,
+    Win32::UI::WindowsAndMessaging::*,
 };
 
 /// Information about an enumerated window
@@ -57,6 +58,10 @@ unsafe extern "system" fn enumerate_callback(hwnd: HWND, lparam: LPARAM) -> BOOL
         return BOOL::from(true);
     }
 
+    if is_dwm_cloaked(hwnd) {
+        return BOOL::from(true);
+    }
+
     let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
     let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
 
@@ -69,9 +74,11 @@ unsafe extern "system" fn enumerate_callback(hwnd: HWND, lparam: LPARAM) -> BOOL
     // Get window title
     let mut title_buf = [0u16; 256];
     let title_len = GetWindowTextW(hwnd, &mut title_buf);
-    let title = String::from_utf16_lossy(&title_buf[..title_len as usize]);
+    let title = String::from_utf16_lossy(&title_buf[..title_len as usize])
+        .trim()
+        .to_string();
 
-    if title.is_empty() && !is_popup {
+    if title.is_empty() {
         return BOOL::from(true);
     }
 
@@ -88,6 +95,9 @@ unsafe extern "system" fn enumerate_callback(hwnd: HWND, lparam: LPARAM) -> BOOL
     // Get window rect
     let mut rect = RECT::default();
     let _ = GetWindowRect(hwnd, &mut rect);
+    if rect.right <= rect.left || rect.bottom <= rect.top {
+        return BOOL::from(true);
+    }
 
     // Compatibility detection
     let (is_compatible, reason) = check_compatibility(hwnd, &exe_path, &class_name);
@@ -114,6 +124,18 @@ unsafe extern "system" fn enumerate_callback(hwnd: HWND, lparam: LPARAM) -> BOOL
     });
 
     BOOL::from(true)
+}
+
+unsafe fn is_dwm_cloaked(hwnd: HWND) -> bool {
+    let mut cloaked: u32 = 0;
+    DwmGetWindowAttribute(
+        hwnd,
+        DWMWA_CLOAKED,
+        &mut cloaked as *mut u32 as *mut std::ffi::c_void,
+        std::mem::size_of::<u32>() as u32,
+    )
+    .is_ok()
+        && cloaked != 0
 }
 
 /// Check if a window can be captured as a workbench thumbnail.
