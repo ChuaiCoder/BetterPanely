@@ -22,12 +22,6 @@
         "label": "workbench"
       }
     ],
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true,
-      "menuOnLeftClick": false,
-      "tooltip": "BetterPanely"
-    },
     "security": {
       "csp": null
     }

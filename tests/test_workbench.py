@@ -908,6 +908,7 @@ class TestWorkbenchPersistenceShape:
         assert "app.tray_by_id(TRAY_ID)" in tray_rs
         assert "tray.set_menu(Some(menu))" in tray_rs
         assert "tray.set_tooltip" in tray_rs
+        assert '"trayIcon"' not in tauri_conf
         assert 'rename_all = "camelCase"' in state_rs
         assert 'alias = "launch_on_startup"' in state_rs
         assert 'alias = "minimize_to_tray"' in state_rs
