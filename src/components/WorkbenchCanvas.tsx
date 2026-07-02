@@ -12,12 +12,12 @@ import {
   focusSource,
   removePanel,
   syncThumbnailStack,
-  updateThumbnailRect,
+  updateThumbnailLayout,
   loadLayout,
   saveLayout,
   openToolWindow,
 } from "../lib/workbench-api";
-import type { ThumbnailRegistration } from "../lib/workbench-api";
+import type { ThumbnailRect, ThumbnailRegistration } from "../lib/workbench-api";
 import type { PanelState, SnapGuide, WindowInfo } from "../lib/types";
 
 const PANEL_HEADER_HEIGHT = 32;
@@ -107,6 +107,7 @@ export function WorkbenchCanvas() {
 
   let canvasRef!: HTMLDivElement;
   let saveTimer: number | undefined;
+  let thumbnailSyncFrame: number | undefined;
   let autoSaveFailureNotified = false;
   let lastThumbnailSyncFailureNoticeAt = 0;
   const noticeTimers: number[] = [];
@@ -204,6 +205,10 @@ export function WorkbenchCanvas() {
     Array.from(canvasRef?.querySelectorAll<HTMLElement>("[data-thumbnail-panel-id]") ?? [])
       .find((element) => element.dataset.thumbnailPanelId === panelId) ?? null;
 
+  const getPanelCardElement = (panelId: string) =>
+    Array.from(canvasRef?.querySelectorAll<HTMLElement>("[data-panel-id]") ?? [])
+      .find((element) => element.dataset.panelId === panelId) ?? null;
+
   const nativeScale = () => window.devicePixelRatio || 1;
 
   const cssRectToNative = (rect: CssRect) => {
@@ -219,6 +224,74 @@ export function WorkbenchCanvas() {
       width: Math.max(1, right - left),
       height: Math.max(1, bottom - top),
     };
+  };
+
+  const panelCardRect = (panel: PanelState): CssRect => {
+    const card = getPanelCardElement(panel.id);
+    if (card) {
+      const rect = card.getBoundingClientRect();
+      return {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+      };
+    }
+
+    const canvasRect = canvasRef?.getBoundingClientRect();
+    const left = panel.x + (canvasRect?.left ?? 0);
+    const top = panel.y + (canvasRect?.top ?? 0);
+    return {
+      left,
+      top,
+      right: left + panel.width,
+      bottom: top + panel.height,
+    };
+  };
+
+  const intersectCssRect = (a: CssRect, b: CssRect): CssRect | null => {
+    const rect = {
+      left: Math.max(a.left, b.left),
+      top: Math.max(a.top, b.top),
+      right: Math.min(a.right, b.right),
+      bottom: Math.min(a.bottom, b.bottom),
+    };
+
+    return rect.right > rect.left && rect.bottom > rect.top ? rect : null;
+  };
+
+  const subtractCssRect = (base: CssRect, occluder: CssRect): CssRect[] => {
+    const intersection = intersectCssRect(base, occluder);
+    if (!intersection) return [base];
+
+    const pieces: CssRect[] = [
+      { left: base.left, top: base.top, right: base.right, bottom: intersection.top },
+      { left: base.left, top: intersection.bottom, right: base.right, bottom: base.bottom },
+      { left: base.left, top: intersection.top, right: intersection.left, bottom: intersection.bottom },
+      { left: intersection.right, top: intersection.top, right: base.right, bottom: intersection.bottom },
+    ];
+
+    return pieces.filter((piece) => piece.right > piece.left && piece.bottom > piece.top);
+  };
+
+  const visibleThumbnailRects = (panel: PanelState, fullRect: CssRect, items: PanelState[]) => {
+    const panelIndex = items.findIndex((item) => item.id === panel.id);
+    const occluders = items
+      .map((item, index) => ({ item, index }))
+      .filter(({ item, index }) => {
+        if (item.id === panel.id) return false;
+        return item.zIndex > panel.zIndex || (item.zIndex === panel.zIndex && index > panelIndex);
+      })
+      .sort((left, right) =>
+        left.item.zIndex === right.item.zIndex
+          ? left.index - right.index
+          : left.item.zIndex - right.item.zIndex
+      );
+
+    return occluders.reduce<CssRect[]>((visible, { item }) => {
+      const occluder = panelCardRect(item);
+      return visible.flatMap((rect) => subtractCssRect(rect, occluder));
+    }, [fullRect]);
   };
 
   const getThumbnailPanelSize = (
@@ -266,21 +339,27 @@ export function WorkbenchCanvas() {
     };
   };
 
-  const getThumbnailRect = (panel: PanelState) => {
+  const getThumbnailCssRect = (panel: PanelState): CssRect => {
     const content = getThumbnailContentElement(panel.id);
     if (content) {
-      return cssRectToNative(content.getBoundingClientRect());
+      const rect = content.getBoundingClientRect();
+      return {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+      };
     }
 
     const canvasRect = canvasRef?.getBoundingClientRect();
     const left = panel.x + (canvasRect?.left ?? 0);
     const top = panel.y + (canvasRect?.top ?? 0) + PANEL_HEADER_HEIGHT;
-    return cssRectToNative({
+    return {
       left,
       top,
       right: left + panel.width,
       bottom: top + Math.max(1, panel.height - PANEL_HEADER_HEIGHT),
-    });
+    };
   };
 
   const constrainPanelPosition = (panel: PanelState, size: CanvasSize = canvasSize()) => {
@@ -296,7 +375,12 @@ export function WorkbenchCanvas() {
     if (draggedExternalPanelId() === panelId) {
       setDraggedExternalPanelId(null);
     }
-    setPanels((prev) => prev.filter((p) => p.id !== panelId));
+    let nextPanels: PanelState[] = [];
+    setPanels((prev) => {
+      nextPanels = prev.filter((p) => p.id !== panelId);
+      return nextPanels;
+    });
+    return nextPanels;
   };
 
   const removeClosedSourcePanel = (panelId: string, sourceHwnd: number) => {
@@ -305,15 +389,25 @@ export function WorkbenchCanvas() {
     );
     if (!panel) return;
 
-    removePanelState(panel.id);
+    const nextPanels = removePanelState(panel.id);
+    syncThumbnailStackOrder(nextPanels, "source-closed");
+    syncAllThumbnailRects("source-closed", nextPanels);
     showNotice(t("app.toast.sourceClosed", { title: panel.title }), "info");
   };
 
-  const syncThumbnailRect = async (panel: PanelState, context = "sync") => {
+  const syncThumbnailRect = async (
+    panel: PanelState,
+    context = "sync",
+    items: PanelState[] = panels()
+  ) => {
     if (panel.type !== "thumbnail" || !panel.sourceHwnd) return true;
-    const rect = getThumbnailRect(panel);
+    const fullCssRect = getThumbnailCssRect(panel);
+    const fullRect = cssRectToNative(fullCssRect);
+    const visibleRects: ThumbnailRect[] = visibleThumbnailRects(panel, fullCssRect, items)
+      .map(cssRectToNative)
+      .filter((rect) => rect.width > 0 && rect.height > 0);
     try {
-      await updateThumbnailRect(panel.id, rect.x, rect.y, rect.width, rect.height);
+      await updateThumbnailLayout(panel.id, fullRect, visibleRects);
       return true;
     } catch (e) {
       if (isStaleThumbnailError(e)) {
@@ -337,9 +431,18 @@ export function WorkbenchCanvas() {
     syncThumbnailStack(panelIds).catch((error) => reportThumbnailSyncFailure(context, error));
   };
 
-  const syncAllThumbnailRects = (context: string) => {
-    thumbnailPanelsInStackOrder().forEach((panel) => {
-      void syncThumbnailRect(panel, context);
+  const syncAllThumbnailRects = (context: string, items: PanelState[] = panels()) => {
+    thumbnailPanelsInStackOrder(items).forEach((panel) => {
+      void syncThumbnailRect(panel, context, items);
+    });
+  };
+
+  const scheduleThumbnailRectsSync = (context: string) => {
+    if (thumbnailSyncFrame !== undefined) return;
+
+    thumbnailSyncFrame = window.requestAnimationFrame(() => {
+      thumbnailSyncFrame = undefined;
+      syncAllThumbnailRects(context);
     });
   };
 
@@ -375,7 +478,7 @@ export function WorkbenchCanvas() {
     const movedPanel = { ...panel, x: position.x, y: position.y };
     setPanels((prev) => prev.map((p) => (p.id === panelId ? movedPanel : p)));
     if (movedPanel.type === "thumbnail") {
-      void syncThumbnailRect(movedPanel, "external-drop");
+      scheduleThumbnailRectsSync("external-drop");
     }
   };
 
@@ -426,10 +529,13 @@ export function WorkbenchCanvas() {
         } catch (cleanupError) {
           console.error("Failed to clean up thumbnail after sync failure:", cleanupError);
         }
-        removePanelState(panelId);
+        const nextPanels = removePanelState(panelId);
+        syncThumbnailStackOrder(nextPanels, "add-cleanup");
+        syncAllThumbnailRects("add-cleanup", nextPanels);
         return null;
       }
       syncThumbnailStackOrder(panels(), "add");
+      syncAllThumbnailRects("add", panels());
       return newPanel;
     } catch (e) {
       if (panelId) {
@@ -465,6 +571,7 @@ export function WorkbenchCanvas() {
       visible: true,
     };
     setPanels((prev) => [...prev, newPanel]);
+    scheduleThumbnailRectsSync("add-tool");
   };
 
   const handleAddThumbnails = (windows: WindowInfo[]) => {
@@ -479,10 +586,14 @@ export function WorkbenchCanvas() {
       if (panel?.type === "thumbnail") {
         await removePanel(panelId);
       }
-      removePanelState(panelId);
+      const nextPanels = removePanelState(panelId);
+      syncThumbnailStackOrder(nextPanels, "remove");
+      syncAllThumbnailRects("remove", nextPanels);
     } catch (e) {
       if (panel?.type === "thumbnail" && isStaleThumbnailError(e)) {
-        removePanelState(panel.id);
+        const nextPanels = removePanelState(panel.id);
+        syncThumbnailStackOrder(nextPanels, "remove-stale");
+        syncAllThumbnailRects("remove-stale", nextPanels);
         return;
       }
       console.error("Failed to remove panel:", e);
@@ -503,6 +614,7 @@ export function WorkbenchCanvas() {
     });
     if (nextPanels) {
       syncThumbnailStackOrder(nextPanels, "top");
+      syncAllThumbnailRects("top", nextPanels);
     }
   };
 
@@ -618,6 +730,7 @@ export function WorkbenchCanvas() {
     const newX = mouseX - dragOffset().x;
     const newY = mouseY - dragOffset().y;
 
+    let didMovePanel = false;
     setPanels((prev) => {
       const otherPanels = prev.filter((p) => p.id !== activePanelId);
       const draggedPanel = prev.find((p) => p.id === activePanelId);
@@ -634,12 +747,12 @@ export function WorkbenchCanvas() {
         x: snapResult.rect.x,
         y: snapResult.rect.y,
       });
-      if (movedPanel.type === "thumbnail") {
-        void syncThumbnailRect(movedPanel, "drag");
-      }
-
+      didMovePanel = true;
       return prev.map((p) => (p.id === activePanelId ? movedPanel : p));
     });
+    if (didMovePanel) {
+      scheduleThumbnailRectsSync("drag");
+    }
   };
 
   const handleCanvasContextMenu = (e: MouseEvent) => {
@@ -696,8 +809,8 @@ export function WorkbenchCanvas() {
     if (!draggingId()) return;
 
     const panel = panels().find((p) => p.id === draggingId());
-    if (panel && panel.type === "thumbnail" && panel.sourceHwnd) {
-      await syncThumbnailRect(panel, "drop");
+    if (panel) {
+      syncAllThumbnailRects("drop");
     }
 
     setDraggingId(null);
@@ -901,6 +1014,9 @@ export function WorkbenchCanvas() {
       cleanupFns.forEach((cleanup) => cleanup());
       if (saveTimer !== undefined) {
         window.clearTimeout(saveTimer);
+      }
+      if (thumbnailSyncFrame !== undefined) {
+        window.cancelAnimationFrame(thumbnailSyncFrame);
       }
       if (layoutReady()) {
         saveLayout(panels())

@@ -121,6 +121,7 @@ pub fn run() {
             commands::workbench_cmds::wb_capture_focused_window,
             commands::workbench_cmds::wb_add_thumbnail,
             commands::workbench_cmds::wb_update_thumbnail_rect,
+            commands::workbench_cmds::wb_update_thumbnail_layout,
             commands::workbench_cmds::wb_sync_thumbnail_stack,
             commands::workbench_cmds::wb_remove_panel,
             commands::workbench_cmds::wb_focus_source,

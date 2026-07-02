@@ -4,6 +4,7 @@ use crate::window_embedder::enumerator;
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use windows::Win32::Foundation::RECT;
 
 #[derive(Serialize, Deserialize)]
 pub struct WindowInfo {
@@ -31,6 +32,14 @@ pub struct AddThumbnailResult {
     pub panel_id: String,
     pub source_width: i32,
     pub source_height: i32,
+}
+
+#[derive(Deserialize)]
+pub struct ThumbnailRectInput {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
 }
 
 fn to_window_info(w: enumerator::WindowInfo) -> WindowInfo {
@@ -79,6 +88,26 @@ fn positive_i32_arg(name: &str, value: f64) -> Result<i32, String> {
         return Err(format!("Thumbnail {} must be positive", name));
     }
     Ok(value)
+}
+
+fn thumbnail_rect_arg(rect: ThumbnailRectInput) -> Result<RECT, String> {
+    let x = finite_i32_arg("x", rect.x)?;
+    let y = finite_i32_arg("y", rect.y)?;
+    let width = positive_i32_arg("width", rect.width)?;
+    let height = positive_i32_arg("height", rect.height)?;
+    let right = x
+        .checked_add(width)
+        .ok_or_else(|| "Thumbnail destination rectangle is out of range".to_string())?;
+    let bottom = y
+        .checked_add(height)
+        .ok_or_else(|| "Thumbnail destination rectangle is out of range".to_string())?;
+
+    Ok(RECT {
+        left: x,
+        top: y,
+        right,
+        bottom,
+    })
 }
 
 struct ToolWindowConfig {
@@ -220,6 +249,24 @@ pub fn wb_update_thumbnail_rect(
 
     thumbnail_manager
         .update_rect(&panel_id, x, y, width, height)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn wb_update_thumbnail_layout(
+    panel_id: String,
+    full_rect: ThumbnailRectInput,
+    visible_rects: Vec<ThumbnailRectInput>,
+    thumbnail_manager: State<'_, SharedThumbnailManager>,
+) -> Result<(), String> {
+    let full_rect = thumbnail_rect_arg(full_rect)?;
+    let visible_rects = visible_rects
+        .into_iter()
+        .map(thumbnail_rect_arg)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    thumbnail_manager
+        .update_layout(&panel_id, full_rect, visible_rects)
         .map_err(|e| e.to_string())
 }
 

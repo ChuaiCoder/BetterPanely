@@ -67,6 +67,7 @@ export function ToolPanel(props: ToolPanelProps) {
   return (
     <div
       class={`panel-card ${props.isDragging ? "panel-dragging" : ""} ${props.isSelected ? "panel-selected" : ""} ${isHovered() ? "panel-hovered" : ""}`}
+      data-panel-id={props.panel.id}
       style={{
         left: `${props.panel.x}px`,
         top: `${props.panel.y}px`,

@@ -33,10 +33,16 @@ pub struct ThumbnailManager {
 pub struct ThumbnailHandle {
     dest_hwnd: isize,
     source_hwnd: isize,
+    source_size: ThumbnailSourceSize,
+    segments: Vec<ThumbnailSegment>,
+    opacity: f32,
+}
+
+pub struct ThumbnailSegment {
     thumbnail_id: DwmThumbnailId,
     dest_rect: RECT,
+    source_rect: Option<RECT>,
     visible: bool,
-    opacity: f32,
 }
 
 #[cfg(target_os = "windows")]
@@ -62,30 +68,135 @@ unsafe fn source_client_size(
 #[cfg(target_os = "windows")]
 unsafe fn apply_thumbnail_properties(
     handle: &ThumbnailHandle,
+    segment: &ThumbnailSegment,
 ) -> Result<(), Box<dyn std::error::Error>> {
     const DWM_TNP_RECTDESTINATION: u32 = 0x00000001;
+    const DWM_TNP_RECTSOURCE: u32 = 0x00000002;
     const DWM_TNP_OPACITY: u32 = 0x00000004;
     const DWM_TNP_VISIBLE: u32 = 0x00000008;
     const DWM_TNP_SOURCECLIENTAREAONLY: u32 = 0x00000010;
+    let source_rect = segment.source_rect.unwrap_or(RECT {
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+    });
 
     let props = DWM_THUMBNAIL_PROPERTIES {
         dwFlags: DWM_TNP_RECTDESTINATION
+            | if segment.source_rect.is_some() {
+                DWM_TNP_RECTSOURCE
+            } else {
+                0
+            }
             | DWM_TNP_OPACITY
             | DWM_TNP_VISIBLE
             | DWM_TNP_SOURCECLIENTAREAONLY,
-        rcDestination: handle.dest_rect,
-        rcSource: RECT {
-            left: 0,
-            top: 0,
-            right: 0,
-            bottom: 0,
-        },
+        rcDestination: segment.dest_rect,
+        rcSource: source_rect,
         opacity: (handle.opacity * 255.0) as u8,
-        fVisible: handle.visible.into(),
+        fVisible: segment.visible.into(),
         fSourceClientAreaOnly: true.into(),
     };
 
-    update_thumbnail_properties(handle.thumbnail_id, &props)
+    update_thumbnail_properties(segment.thumbnail_id, &props)
+}
+
+#[cfg(target_os = "windows")]
+unsafe fn unregister_handle(handle: ThumbnailHandle) {
+    for segment in handle.segments {
+        let _ = unregister_thumbnail(segment.thumbnail_id);
+    }
+}
+
+#[cfg(target_os = "windows")]
+unsafe fn register_hidden_segment(
+    dest_hwnd: isize,
+    source_hwnd: isize,
+) -> Result<ThumbnailSegment, Box<dyn std::error::Error>> {
+    Ok(ThumbnailSegment {
+        thumbnail_id: register_thumbnail(
+            windows::Win32::Foundation::HWND(dest_hwnd as *mut _),
+            windows::Win32::Foundation::HWND(source_hwnd as *mut _),
+        )?,
+        dest_rect: RECT {
+            left: 0,
+            top: 0,
+            right: 1,
+            bottom: 1,
+        },
+        source_rect: None,
+        visible: false,
+    })
+}
+
+fn rect_width(rect: &RECT) -> i32 {
+    rect.right - rect.left
+}
+
+fn rect_height(rect: &RECT) -> i32 {
+    rect.bottom - rect.top
+}
+
+fn intersect_rect(left: &RECT, right: &RECT) -> Option<RECT> {
+    let rect = RECT {
+        left: left.left.max(right.left),
+        top: left.top.max(right.top),
+        right: left.right.min(right.right),
+        bottom: left.bottom.min(right.bottom),
+    };
+
+    (rect_width(&rect) > 0 && rect_height(&rect) > 0).then_some(rect)
+}
+
+fn clamp_source_coord(value: i32, max: i32) -> i32 {
+    value.clamp(0, max)
+}
+
+fn source_rect_for_segment(
+    full_dest_rect: &RECT,
+    segment_dest_rect: &RECT,
+    source_size: ThumbnailSourceSize,
+) -> Result<RECT, Box<dyn std::error::Error>> {
+    let dest_width = rect_width(full_dest_rect);
+    let dest_height = rect_height(full_dest_rect);
+    if dest_width <= 0 || dest_height <= 0 || source_size.width <= 0 || source_size.height <= 0 {
+        return Err("Thumbnail layout rectangle is invalid".into());
+    }
+
+    let source_width = source_size.width as f64;
+    let source_height = source_size.height as f64;
+    let dest_width = dest_width as f64;
+    let dest_height = dest_height as f64;
+
+    let left = (((segment_dest_rect.left - full_dest_rect.left) as f64 / dest_width) * source_width)
+        .floor() as i32;
+    let top = (((segment_dest_rect.top - full_dest_rect.top) as f64 / dest_height) * source_height)
+        .floor() as i32;
+    let right = (((segment_dest_rect.right - full_dest_rect.left) as f64 / dest_width)
+        * source_width)
+        .ceil() as i32;
+    let bottom = (((segment_dest_rect.bottom - full_dest_rect.top) as f64 / dest_height)
+        * source_height)
+        .ceil() as i32;
+
+    let left = clamp_source_coord(left, source_size.width);
+    let top = clamp_source_coord(top, source_size.height);
+    let mut right = clamp_source_coord(right, source_size.width);
+    let mut bottom = clamp_source_coord(bottom, source_size.height);
+    if right <= left {
+        right = (left + 1).min(source_size.width);
+    }
+    if bottom <= top {
+        bottom = (top + 1).min(source_size.height);
+    }
+
+    Ok(RECT {
+        left,
+        top,
+        right,
+        bottom,
+    })
 }
 
 impl ThumbnailManager {
@@ -117,7 +228,7 @@ impl ThumbnailManager {
         }
 
         if let Some(old_handle) = self.thumbnails.remove(panel_id) {
-            let _ = unregister_thumbnail(old_handle.thumbnail_id);
+            unregister_handle(old_handle);
         }
 
         let thumbnail_id = register_thumbnail(
@@ -130,14 +241,18 @@ impl ThumbnailManager {
         let handle = ThumbnailHandle {
             dest_hwnd,
             source_hwnd,
-            thumbnail_id,
-            dest_rect: RECT {
-                left: 0,
-                top: 0,
-                right: 100,
-                bottom: 100,
-            },
-            visible: false,
+            source_size,
+            segments: vec![ThumbnailSegment {
+                thumbnail_id,
+                dest_rect: RECT {
+                    left: 0,
+                    top: 0,
+                    right: 100,
+                    bottom: 100,
+                },
+                source_rect: None,
+                visible: false,
+            }],
             opacity: 1.0,
         };
 
@@ -192,7 +307,7 @@ impl ThumbnailManager {
             .source_hwnd;
         if !IsWindow(windows::Win32::Foundation::HWND(source_hwnd as *mut _)).as_bool() {
             if let Some(handle) = self.thumbnails.remove(panel_id) {
-                let _ = unregister_thumbnail(handle.thumbnail_id);
+                unregister_handle(handle);
             }
             return Err("Thumbnail source window is no longer available".into());
         }
@@ -208,15 +323,91 @@ impl ThumbnailManager {
             .get_mut(panel_id)
             .ok_or("Thumbnail not found")?;
 
-        handle.dest_rect = RECT {
+        if handle.segments.is_empty() {
+            handle.segments.push(register_hidden_segment(
+                handle.dest_hwnd,
+                handle.source_hwnd,
+            )?);
+        }
+
+        for segment in handle.segments.drain(1..) {
+            let _ = unregister_thumbnail(segment.thumbnail_id);
+        }
+
+        handle.segments[0].dest_rect = RECT {
             left: x,
             top: y,
             right,
             bottom,
         };
-        handle.visible = true;
+        handle.segments[0].source_rect = None;
+        handle.segments[0].visible = true;
 
-        apply_thumbnail_properties(handle)?;
+        apply_thumbnail_properties(handle, &handle.segments[0])?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    pub unsafe fn update_layout(
+        &mut self,
+        panel_id: &str,
+        full_dest_rect: RECT,
+        visible_dest_rects: Vec<RECT>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if rect_width(&full_dest_rect) <= 0 || rect_height(&full_dest_rect) <= 0 {
+            return Err("Thumbnail destination must have positive dimensions".into());
+        }
+
+        let source_hwnd = self
+            .thumbnails
+            .get(panel_id)
+            .ok_or("Thumbnail not found")?
+            .source_hwnd;
+        if !IsWindow(windows::Win32::Foundation::HWND(source_hwnd as *mut _)).as_bool() {
+            if let Some(handle) = self.thumbnails.remove(panel_id) {
+                unregister_handle(handle);
+            }
+            return Err("Thumbnail source window is no longer available".into());
+        }
+
+        let handle = self
+            .thumbnails
+            .get_mut(panel_id)
+            .ok_or("Thumbnail not found")?;
+
+        let visible_dest_rects: Vec<RECT> = visible_dest_rects
+            .into_iter()
+            .filter_map(|rect| intersect_rect(&full_dest_rect, &rect))
+            .collect();
+
+        if visible_dest_rects.is_empty() {
+            for index in 0..handle.segments.len() {
+                handle.segments[index].visible = false;
+                let _ = apply_thumbnail_properties(handle, &handle.segments[index]);
+            }
+            return Ok(());
+        }
+
+        while handle.segments.len() < visible_dest_rects.len() {
+            handle.segments.push(register_hidden_segment(
+                handle.dest_hwnd,
+                handle.source_hwnd,
+            )?);
+        }
+
+        for segment in handle.segments.drain(visible_dest_rects.len()..) {
+            let _ = unregister_thumbnail(segment.thumbnail_id);
+        }
+
+        for (index, dest_rect) in visible_dest_rects.into_iter().enumerate() {
+            let source_rect =
+                source_rect_for_segment(&full_dest_rect, &dest_rect, handle.source_size)?;
+            handle.segments[index].dest_rect = dest_rect;
+            handle.segments[index].source_rect = Some(source_rect);
+            handle.segments[index].visible = true;
+            apply_thumbnail_properties(handle, &handle.segments[index])?;
+        }
+
         Ok(())
     }
 
@@ -250,7 +441,7 @@ impl ThumbnailManager {
 
         for (panel_id, mut handle) in next_stack {
             if !IsWindow(windows::Win32::Foundation::HWND(handle.dest_hwnd as *mut _)).as_bool() {
-                let _ = unregister_thumbnail(handle.thumbnail_id);
+                unregister_handle(handle);
                 continue;
             }
             if !IsWindow(windows::Win32::Foundation::HWND(
@@ -258,38 +449,58 @@ impl ThumbnailManager {
             ))
             .as_bool()
             {
-                let _ = unregister_thumbnail(handle.thumbnail_id);
+                unregister_handle(handle);
                 continue;
             }
 
-            if let Err(error) = unregister_thumbnail(handle.thumbnail_id) {
-                if first_error.is_none() {
-                    first_error = Some(error.to_string());
-                }
-                self.thumbnails.insert(panel_id, handle);
-                continue;
-            }
+            let old_segments = std::mem::take(&mut handle.segments);
+            let mut next_segments = Vec::with_capacity(old_segments.len());
 
-            let thumbnail_id = match register_thumbnail(
-                windows::Win32::Foundation::HWND(handle.dest_hwnd as *mut _),
-                windows::Win32::Foundation::HWND(handle.source_hwnd as *mut _),
-            ) {
-                Ok(thumbnail_id) => thumbnail_id,
-                Err(error) => {
+            for mut segment in old_segments {
+                if let Err(error) = unregister_thumbnail(segment.thumbnail_id) {
                     if first_error.is_none() {
                         first_error = Some(error.to_string());
                     }
+                    next_segments.push(segment);
                     continue;
                 }
-            };
-            handle.thumbnail_id = thumbnail_id;
-            if handle.visible {
-                if let Err(error) = apply_thumbnail_properties(&handle) {
-                    if first_error.is_none() {
-                        first_error = Some(error.to_string());
+
+                let thumbnail_id = match register_thumbnail(
+                    windows::Win32::Foundation::HWND(handle.dest_hwnd as *mut _),
+                    windows::Win32::Foundation::HWND(handle.source_hwnd as *mut _),
+                ) {
+                    Ok(thumbnail_id) => thumbnail_id,
+                    Err(error) => {
+                        if first_error.is_none() {
+                            first_error = Some(error.to_string());
+                        }
+                        continue;
+                    }
+                };
+
+                segment.thumbnail_id = thumbnail_id;
+                if segment.visible {
+                    if let Err(error) = apply_thumbnail_properties(&handle, &segment) {
+                        if first_error.is_none() {
+                            first_error = Some(error.to_string());
+                        }
+                    }
+                }
+                next_segments.push(segment);
+            }
+
+            if next_segments.is_empty() {
+                match register_hidden_segment(handle.dest_hwnd, handle.source_hwnd) {
+                    Ok(segment) => next_segments.push(segment),
+                    Err(error) => {
+                        if first_error.is_none() {
+                            first_error = Some(error.to_string());
+                        }
                     }
                 }
             }
+
+            handle.segments = next_segments;
             self.thumbnails.insert(panel_id, handle);
         }
 
@@ -306,7 +517,7 @@ impl ThumbnailManager {
         panel_id: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(handle) = self.thumbnails.remove(panel_id) {
-            let _ = unregister_thumbnail(handle.thumbnail_id);
+            unregister_handle(handle);
         }
         Ok(())
     }
@@ -314,7 +525,7 @@ impl ThumbnailManager {
     #[cfg(target_os = "windows")]
     pub unsafe fn unregister_all(&mut self) {
         for (_, handle) in self.thumbnails.drain() {
-            let _ = unregister_thumbnail(handle.thumbnail_id);
+            unregister_handle(handle);
         }
     }
 
@@ -335,10 +546,11 @@ impl ThumbnailManager {
             .into_iter()
             .filter_map(|panel_id| {
                 self.thumbnails.remove(&panel_id).map(|handle| {
-                    let _ = unregister_thumbnail(handle.thumbnail_id);
+                    let source_hwnd = handle.source_hwnd;
+                    unregister_handle(handle);
                     SourceClosedPayload {
                         panel_id,
-                        source_hwnd: handle.source_hwnd,
+                        source_hwnd,
                     }
                 })
             })
@@ -398,6 +610,18 @@ impl SharedThumbnailManager {
         unsafe {
             self.lock_manager()?
                 .update_rect(panel_id, x, y, width, height)
+        }
+    }
+
+    pub fn update_layout(
+        &self,
+        panel_id: &str,
+        full_dest_rect: RECT,
+        visible_dest_rects: Vec<RECT>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        unsafe {
+            self.lock_manager()?
+                .update_layout(panel_id, full_dest_rect, visible_dest_rects)
         }
     }
 

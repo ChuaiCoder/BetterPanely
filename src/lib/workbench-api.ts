@@ -27,6 +27,13 @@ export interface ThumbnailRegistration {
   sourceHeight: number;
 }
 
+export interface ThumbnailRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 function mapWindowInfo(raw: WindowInfoRaw): WindowInfo {
   return {
     hwnd: raw.hwnd,
@@ -82,6 +89,14 @@ export async function updateThumbnailRect(
   height: number
 ): Promise<void> {
   return invoke("wb_update_thumbnail_rect", { panelId, x, y, width, height });
+}
+
+export async function updateThumbnailLayout(
+  panelId: string,
+  fullRect: ThumbnailRect,
+  visibleRects: ThumbnailRect[]
+): Promise<void> {
+  return invoke("wb_update_thumbnail_layout", { panelId, fullRect, visibleRects });
 }
 
 export async function syncThumbnailStack(panelIds: string[]): Promise<void> {

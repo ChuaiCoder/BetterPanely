@@ -37,6 +37,7 @@ class TestWorkbenchRuntimeShape:
         assert "commands::workbench_cmds::wb_capture_focused_window" in lib_rs
         assert "commands::workbench_cmds::wb_capture_window_under_cursor" not in lib_rs
         assert "commands::workbench_cmds::wb_update_thumbnail_rect" in lib_rs
+        assert "commands::workbench_cmds::wb_update_thumbnail_layout" in lib_rs
         assert "commands::workbench_cmds::wb_sync_thumbnail_stack" in lib_rs
         assert "commands::workbench_cmds::wb_open_tool_window" in lib_rs
         assert "commands::settings_cmds::set_settings" in lib_rs
@@ -77,6 +78,8 @@ class TestWorkbenchRuntimeShape:
         assert "DwmUpdateThumbnailProperties" in dwm_rs
         assert "DwmUnregisterThumbnail" in dwm_rs
         assert "DWM_TNP_RECTDESTINATION" in manager_rs
+        assert "DWM_TNP_RECTSOURCE" in manager_rs
+        assert "source_rect_for_segment" in manager_rs
         assert "GetClientRect" in manager_rs
         assert "source_client_size(source_hwnd)" in manager_rs
         assert "query_thumbnail_source_size(thumbnail_id)" in manager_rs
@@ -84,6 +87,11 @@ class TestWorkbenchRuntimeShape:
         assert "source_width: source_size.width" in workbench_cmds
         assert "source_height: source_size.height" in workbench_cmds
         assert "wb_sync_thumbnail_stack" in workbench_cmds
+        assert "wb_update_thumbnail_layout" in workbench_cmds
+        assert "ThumbnailRectInput" in workbench_cmds
+        assert "visible_rects" in workbench_cmds
+        assert "thumbnail_rect_arg" in workbench_cmds
+        assert ".update_layout(&panel_id,full_rect,visible_rects)" in compact_workbench_cmds
         assert ".sync_stack_order(panel_ids)" in compact_workbench_cmds
         assert "get_webview_window(crate::WORKBENCH_WINDOW_LABEL)" in workbench_cmds
         assert ".register(dest_hwnd,source_hwnd,&panel_id)" in compact_workbench_cmds
@@ -180,22 +188,33 @@ class TestWorkbenchRuntimeShape:
         assert "SourceClosedPayload" in manager_rs
         assert '"thumb:source-closed"' in manager_rs
         assert "visible: false" in manager_rs
-        assert "handle.visible = true;" in manager_rs
+        assert "segments: Vec<ThumbnailSegment>" in manager_rs
+        assert "pub struct ThumbnailSegment" in manager_rs
+        assert "source_rect: Option<RECT>" in manager_rs
+        assert "unregister_handle" in manager_rs
+        assert "register_hidden_segment" in manager_rs
         assert "apply_thumbnail_properties" in manager_rs
         assert "pub unsafe fn sync_stack_order" in manager_rs
         assert "HashSet" in manager_rs
         assert "std::mem::take(&mut self.thumbnails)" in manager_rs
         assert "next_stack.extend(ordered_handles)" in manager_rs
         assert "let thumbnail_id = match register_thumbnail" in manager_rs
-        assert "handle.thumbnail_id = thumbnail_id;" in manager_rs
-        assert "apply_thumbnail_properties(&handle)" in manager_rs
+        assert "segment.thumbnail_id = thumbnail_id;" in manager_rs
+        assert "apply_thumbnail_properties(&handle, &segment)" in manager_rs
         assert "install_source_lifecycle_hook" in lib_rs
         assert "listen<SourceClosedPayload>" in canvas_tsx
         assert 'data-thumbnail-panel-id={props.panel.id}' in thumb_panel
+        assert 'data-panel-id={props.panel.id}' in thumb_panel
         assert "getThumbnailContentElement" in canvas_tsx
+        assert "getPanelCardElement" in canvas_tsx
         assert "element.dataset.thumbnailPanelId === panelId" in canvas_tsx
+        assert "element.dataset.panelId === panelId" in canvas_tsx
         assert "window.devicePixelRatio || 1" in canvas_tsx
-        assert "cssRectToNative(content.getBoundingClientRect())" in canvas_tsx
+        assert "const fullCssRect = getThumbnailCssRect(panel)" in canvas_tsx
+        assert "const fullRect = cssRectToNative(fullCssRect)" in canvas_tsx
+        assert "visibleThumbnailRects(panel, fullCssRect, items)" in canvas_tsx
+        assert "updateThumbnailLayout(panel.id, fullRect, visibleRects)" in canvas_tsx
+        assert "scheduleThumbnailRectsSync" in canvas_tsx
         assert "waitForNextFrame" in canvas_tsx
         assert "await waitForNextFrame()" in canvas_tsx
         assert 'syncThumbnailRect(newPanel, "add")' in canvas_tsx
@@ -216,7 +235,6 @@ class TestWorkbenchRuntimeShape:
         assert 'syncThumbnailStackOrder(panels(), "add")' in canvas_tsx
         assert 'syncThumbnailStackOrder(nextPanels, "top")' in canvas_tsx
         assert 'syncThumbnailStackOrder(panels(), "restore")' in canvas_tsx
-        assert "const rect = getThumbnailRect(panel)" in canvas_tsx
         assert "await syncThumbnailRect(newPanel);" not in canvas_tsx
         assert canvas_tsx.index("setPanels((prev) => [...prev, newPanel])") < canvas_tsx.index(
             "const synced = await syncThumbnailRect(newPanel"
@@ -225,6 +243,49 @@ class TestWorkbenchRuntimeShape:
         assert "await removePanel(panelId)" in canvas_tsx
         assert "Failed to clean up thumbnail after add failure" in canvas_tsx
         assert "Failed to clean up thumbnail after sync failure" in canvas_tsx
+
+    def test_thumbnail_overlays_are_clipped_by_higher_panels(self, repo_root):
+        manager_rs = (repo_root / "src-tauri/src/thumbnail/manager.rs").read_text(
+            encoding="utf-8"
+        )
+        canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
+            encoding="utf-8"
+        )
+        thumb_panel = (repo_root / "src/components/ThumbPanel.tsx").read_text(
+            encoding="utf-8"
+        )
+        tool_panel = (repo_root / "src/components/ToolPanel.tsx").read_text(
+            encoding="utf-8"
+        )
+        workbench_api = (repo_root / "src/lib/workbench-api.ts").read_text(
+            encoding="utf-8"
+        )
+        workbench_cmds = (
+            repo_root / "src-tauri/src/commands/workbench_cmds.rs"
+        ).read_text(encoding="utf-8")
+
+        assert "export interface ThumbnailRect" in workbench_api
+        assert "updateThumbnailLayout(" in workbench_api
+        assert 'invoke("wb_update_thumbnail_layout", { panelId, fullRect, visibleRects })' in workbench_api
+        assert "pub fn wb_update_thumbnail_layout" in workbench_cmds
+        assert "visible_rects" in workbench_cmds
+        assert 'data-panel-id={props.panel.id}' in thumb_panel
+        assert 'data-panel-id={props.panel.id}' in tool_panel
+        assert "const panelCardRect = (panel: PanelState): CssRect" in canvas_tsx
+        assert "const subtractCssRect = (base: CssRect, occluder: CssRect): CssRect[]" in canvas_tsx
+        assert "const visibleThumbnailRects = (panel: PanelState, fullRect: CssRect, items: PanelState[])" in canvas_tsx
+        assert "item.zIndex > panel.zIndex" in canvas_tsx
+        assert "item.zIndex === panel.zIndex && index > panelIndex" in canvas_tsx
+        assert "return visible.flatMap((rect) => subtractCssRect(rect, occluder));" in canvas_tsx
+        assert "const visibleRects: ThumbnailRect[] = visibleThumbnailRects(panel, fullCssRect, items)" in canvas_tsx
+        assert "await updateThumbnailLayout(panel.id, fullRect, visibleRects)" in canvas_tsx
+        assert 'scheduleThumbnailRectsSync("add-tool")' in canvas_tsx
+        assert 'scheduleThumbnailRectsSync("drag")' in canvas_tsx
+        assert "DWM_TNP_RECTSOURCE" in manager_rs
+        assert "segment.source_rect.is_some()" in manager_rs
+        assert "source_rect_for_segment(&full_dest_rect, &dest_rect, handle.source_size)" in manager_rs
+        assert "handle.segments.len() < visible_dest_rects.len()" in manager_rs
+        assert "handle.segments.drain(visible_dest_rects.len()..)" in manager_rs
 
     def test_add_panel_dialog_blocks_incompatible_windows(self, repo_root):
         dialog_tsx = (repo_root / "src/components/AddPanelDialog.tsx").read_text(
@@ -503,7 +564,8 @@ class TestWorkbenchRuntimeShape:
         assert 'message.includes("thumbnail not found")' in canvas_tsx
         assert "const removePanelState = (panelId: string)" in canvas_tsx
         assert "setDraggedExternalPanelId(null)" in canvas_tsx
-        assert "setPanels((prev) => prev.filter((p) => p.id !== panelId))" in canvas_tsx
+        assert "nextPanels = prev.filter((p) => p.id !== panelId)" in canvas_tsx
+        assert "return nextPanels;" in canvas_tsx
         assert "if (panel?.type === \"thumbnail\" && isStaleThumbnailError(e))" in close_block
         assert "removePanelState(panel.id)" in close_block
         assert close_block.index("isStaleThumbnailError(e)") < close_block.index(
@@ -671,16 +733,17 @@ class TestWorkbenchRuntimeShape:
         )
         assert "lastThumbnailSyncFailureNoticeAt = now" in canvas_tsx
         assert "app.toast.thumbnailSyncFailed" in canvas_tsx
-        assert "syncThumbnailRect = async (panel: PanelState, context = \"sync\")" in canvas_tsx
+        assert "items: PanelState[] = panels()" in sync_rect_block
         assert "reportThumbnailSyncFailure(context, e)" in sync_rect_block
         assert "throw e" not in sync_rect_block
         assert "syncThumbnailStack(panelIds)" in canvas_tsx
-        assert "thumbnailPanelsInStackOrder().forEach" in canvas_tsx
+        assert "thumbnailPanelsInStackOrder(items).forEach" in canvas_tsx
         assert ".sort((left, right) => left.zIndex - right.zIndex)" in canvas_tsx
-        assert "void syncThumbnailRect(panel, context)" in canvas_tsx
-        assert 'void syncThumbnailRect(movedPanel, "external-drop")' in canvas_tsx
-        assert 'void syncThumbnailRect(movedPanel, "drag")' in canvas_tsx
-        assert 'await syncThumbnailRect(panel, "drop")' in canvas_tsx
+        assert "void syncThumbnailRect(panel, context, items)" in canvas_tsx
+        assert 'scheduleThumbnailRectsSync("external-drop")' in canvas_tsx
+        assert 'scheduleThumbnailRectsSync("drag")' in canvas_tsx
+        assert 'syncAllThumbnailRects("drop")' in canvas_tsx
+        assert 'scheduleThumbnailRectsSync("add-tool")' in canvas_tsx
         assert 'syncAllThumbnailRects("resize")' in canvas_tsx
         assert 'syncAllThumbnailRects("health-check")' in canvas_tsx
         assert "syncThumbnailRect(panel).catch(console.error)" not in canvas_tsx
