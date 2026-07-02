@@ -292,6 +292,8 @@ class TestWorkbenchRuntimeShape:
         assert "refresh_tool_window_titles" in workbench_cmds
         assert "WebviewWindowBuilder::new" in workbench_cmds
         assert "tool_{}_window" in workbench_cmds
+        assert ".skip_taskbar(true)" in workbench_cmds
+        assert "window.set_skip_taskbar(true)" in workbench_cmds
         assert "window.set_title(crate::locales::t(config.title_key, lang))" in workbench_cmds
         assert "window.set_title(crate::locales::t(config.title_key, &lang))" in workbench_cmds
         assert "openToolWindow(toolId: string)" in workbench_api
@@ -937,17 +939,20 @@ class TestWorkbenchPersistenceShape:
         assert "state_mgr.set_settings(old_settings);" in settings_cmds
         assert "return Err(error.to_string());" in settings_cmds
         assert "settings_window_title" in settings_cmds
+        assert "pub fn open_settings_window<R: Runtime>(" in settings_cmds
         assert "refresh_localized_window_titles" in settings_cmds
         assert 'crate::locales::t("menu.settings", lang)' in settings_cmds
         assert "window.set_title(settings_window_title(lang))" in settings_cmds
         assert "refresh_tool_window_titles(app_handle, lang)" in settings_cmds
         assert "refresh_localized_window_titles(&app_handle, &saved_settings.language)" in settings_cmds
         assert "refresh_localized_window_titles(&app_handle, &new_lang)" in settings_cmds
+        assert ".skip_taskbar(true)" in settings_cmds
+        assert "window.set_skip_taskbar(true)" in settings_cmds
         assert ".title(title)" in settings_cmds
         assert '.title("Settings")' not in settings_cmds
-        assert "settings_cmds::settings_window_title(&lang)" in tray_rs
-        assert "w.set_title(title)" in tray_rs
-        assert ".title(title)" in tray_rs
+        assert "settings_cmds::open_settings_window(app_handle, &lang)" in tray_rs
+        assert "Failed to open settings window from tray" in tray_rs
+        assert "WebviewWindowBuilder" not in tray_rs
         assert '.title("Settings")' not in tray_rs
         assert "register_capture_hotkey(app.handle(), &capture_hotkey)" in lib_rs
         assert "ShortcutState::Pressed" in hotkeys_rs

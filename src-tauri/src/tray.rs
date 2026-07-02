@@ -1,7 +1,7 @@
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder,
+    AppHandle, Emitter, Manager, Runtime,
 };
 
 const TRAY_ID: &str = "betterpanely-tray";
@@ -138,7 +138,6 @@ fn handle_tray_menu<R: Runtime>(app_handle: &AppHandle<R>, menu_id: &str) {
             }
         }
         "settings" => {
-            // Open settings directly
             let state = app_handle.state::<crate::AppState>();
             let lang = {
                 match state.state_manager.lock() {
@@ -149,24 +148,10 @@ fn handle_tray_menu<R: Runtime>(app_handle: &AppHandle<R>, menu_id: &str) {
                     }
                 }
             };
-            let label = "settings_window";
-            let title = crate::commands::settings_cmds::settings_window_title(&lang);
-            if app_handle.get_webview_window(label).is_some() {
-                if let Some(w) = app_handle.get_webview_window(label) {
-                    let _ = w.set_title(title);
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
-            } else {
-                let url = format!("src/tools/settings/index.html#lang={}", lang);
-                let _webview =
-                    WebviewWindowBuilder::new(app_handle, label, WebviewUrl::App(url.into()))
-                        .title(title)
-                        .inner_size(420.0, 520.0)
-                        .center()
-                        .decorations(true)
-                        .resizable(false)
-                        .build();
+            if let Err(error) =
+                crate::commands::settings_cmds::open_settings_window(app_handle, &lang)
+            {
+                log::error!("Failed to open settings window from tray: {}", error);
             }
         }
         "lang_en" => {

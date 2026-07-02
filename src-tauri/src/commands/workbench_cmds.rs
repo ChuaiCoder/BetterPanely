@@ -265,6 +265,7 @@ pub fn wb_open_tool_window(
     let label = format!("tool_{}_window", tool_id);
     if let Some(window) = app.get_webview_window(&label) {
         let _ = window.set_title(crate::locales::t(config.title_key, &lang));
+        let _ = window.set_skip_taskbar(true);
         let _ = window.show();
         let _ = window.set_focus();
         return Ok(());
@@ -277,6 +278,7 @@ pub fn wb_open_tool_window(
         .center()
         .decorations(true)
         .resizable(true)
+        .skip_taskbar(true)
         .build()
         .map_err(|e| e.to_string())?;
 

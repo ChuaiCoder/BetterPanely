@@ -1,6 +1,6 @@
 use crate::state::AppSettings;
 use crate::AppState;
-use tauri::{command, AppHandle, Emitter, Manager, State};
+use tauri::{command, AppHandle, Emitter, Manager, Runtime, State};
 
 pub fn settings_window_title(lang: &str) -> &'static str {
     crate::locales::t("menu.settings", lang)
@@ -11,6 +11,35 @@ fn refresh_localized_window_titles(app_handle: &AppHandle, lang: &str) {
         let _ = window.set_title(settings_window_title(lang));
     }
     crate::commands::workbench_cmds::refresh_tool_window_titles(app_handle, lang);
+}
+
+pub fn open_settings_window<R: Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+    lang: &str,
+) -> Result<(), String> {
+    let url = format!("src/tools/settings/index.html#lang={}", lang);
+    let label = "settings_window";
+    let title = settings_window_title(lang);
+
+    if let Some(window) = app_handle.get_webview_window(label) {
+        let _ = window.set_title(title);
+        let _ = window.set_skip_taskbar(true);
+        let _ = window.show();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
+    tauri::WebviewWindowBuilder::new(app_handle, label, tauri::WebviewUrl::App(url.into()))
+        .title(title)
+        .inner_size(420.0, 520.0)
+        .center()
+        .decorations(true)
+        .resizable(false)
+        .skip_taskbar(true)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 /// Get the full application settings
@@ -144,27 +173,7 @@ pub async fn open_settings(
     let lang = state_mgr.get_language();
     drop(state_mgr);
 
-    let url = format!("src/tools/settings/index.html#lang={}", lang);
-    let label = "settings_window";
-    let title = settings_window_title(&lang);
-
-    if let Some(window) = app_handle.get_webview_window(label) {
-        let _ = window.set_title(title);
-        let _ = window.show();
-        let _ = window.set_focus();
-        return Ok(());
-    }
-
-    tauri::WebviewWindowBuilder::new(&app_handle, label, tauri::WebviewUrl::App(url.into()))
-        .title(title)
-        .inner_size(420.0, 520.0)
-        .center()
-        .decorations(true)
-        .resizable(false)
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    Ok(())
+    open_settings_window(&app_handle, &lang)
 }
 
 #[cfg(target_os = "windows")]
