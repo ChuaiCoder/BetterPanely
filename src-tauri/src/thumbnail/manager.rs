@@ -1,6 +1,6 @@
 use super::dwm::*;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use tauri::{AppHandle, Emitter, Manager};
 use windows::Win32::Foundation::RECT;
@@ -31,6 +31,7 @@ pub struct ThumbnailManager {
 }
 
 pub struct ThumbnailHandle {
+    dest_hwnd: isize,
     source_hwnd: isize,
     thumbnail_id: DwmThumbnailId,
     dest_rect: RECT,
@@ -56,6 +57,35 @@ unsafe fn source_client_size(
     }
 
     Ok(ThumbnailSourceSize { width, height })
+}
+
+#[cfg(target_os = "windows")]
+unsafe fn apply_thumbnail_properties(
+    handle: &ThumbnailHandle,
+) -> Result<(), Box<dyn std::error::Error>> {
+    const DWM_TNP_RECTDESTINATION: u32 = 0x00000001;
+    const DWM_TNP_OPACITY: u32 = 0x00000004;
+    const DWM_TNP_VISIBLE: u32 = 0x00000008;
+    const DWM_TNP_SOURCECLIENTAREAONLY: u32 = 0x00000010;
+
+    let props = DWM_THUMBNAIL_PROPERTIES {
+        dwFlags: DWM_TNP_RECTDESTINATION
+            | DWM_TNP_OPACITY
+            | DWM_TNP_VISIBLE
+            | DWM_TNP_SOURCECLIENTAREAONLY,
+        rcDestination: handle.dest_rect,
+        rcSource: RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        },
+        opacity: (handle.opacity * 255.0) as u8,
+        fVisible: handle.visible.into(),
+        fSourceClientAreaOnly: true.into(),
+    };
+
+    update_thumbnail_properties(handle.thumbnail_id, &props)
 }
 
 impl ThumbnailManager {
@@ -98,6 +128,7 @@ impl ThumbnailManager {
             .or_else(|_| query_thumbnail_source_size(thumbnail_id))?;
 
         let handle = ThumbnailHandle {
+            dest_hwnd,
             source_hwnd,
             thumbnail_id,
             dest_rect: RECT {
@@ -185,30 +216,88 @@ impl ThumbnailManager {
         };
         handle.visible = true;
 
-        const DWM_TNP_RECTDESTINATION: u32 = 0x00000001;
-        const DWM_TNP_OPACITY: u32 = 0x00000004;
-        const DWM_TNP_VISIBLE: u32 = 0x00000008;
-        const DWM_TNP_SOURCECLIENTAREAONLY: u32 = 0x00000010;
-
-        let props = DWM_THUMBNAIL_PROPERTIES {
-            dwFlags: DWM_TNP_RECTDESTINATION
-                | DWM_TNP_OPACITY
-                | DWM_TNP_VISIBLE
-                | DWM_TNP_SOURCECLIENTAREAONLY,
-            rcDestination: handle.dest_rect,
-            rcSource: RECT {
-                left: 0,
-                top: 0,
-                right: 0,
-                bottom: 0,
-            },
-            opacity: (handle.opacity * 255.0) as u8,
-            fVisible: handle.visible.into(),
-            fSourceClientAreaOnly: true.into(),
-        };
-
-        update_thumbnail_properties(handle.thumbnail_id, &props)?;
+        apply_thumbnail_properties(handle)?;
         Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    pub unsafe fn sync_stack_order(
+        &mut self,
+        ordered_panel_ids: Vec<String>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if ordered_panel_ids.is_empty() || self.thumbnails.len() <= 1 {
+            return Ok(());
+        }
+
+        let mut remaining = std::mem::take(&mut self.thumbnails);
+        let mut seen = HashSet::new();
+        let mut ordered_handles = Vec::new();
+
+        for panel_id in ordered_panel_ids {
+            if !seen.insert(panel_id.clone()) {
+                continue;
+            }
+            if let Some(handle) = remaining.remove(&panel_id) {
+                ordered_handles.push((panel_id, handle));
+            }
+        }
+
+        let mut next_stack: Vec<(String, ThumbnailHandle)> = remaining.into_iter().collect();
+        next_stack.sort_by(|(left_id, _), (right_id, _)| left_id.cmp(right_id));
+        next_stack.extend(ordered_handles);
+
+        let mut first_error: Option<String> = None;
+
+        for (panel_id, mut handle) in next_stack {
+            if !IsWindow(windows::Win32::Foundation::HWND(handle.dest_hwnd as *mut _)).as_bool() {
+                let _ = unregister_thumbnail(handle.thumbnail_id);
+                continue;
+            }
+            if !IsWindow(windows::Win32::Foundation::HWND(
+                handle.source_hwnd as *mut _,
+            ))
+            .as_bool()
+            {
+                let _ = unregister_thumbnail(handle.thumbnail_id);
+                continue;
+            }
+
+            if let Err(error) = unregister_thumbnail(handle.thumbnail_id) {
+                if first_error.is_none() {
+                    first_error = Some(error.to_string());
+                }
+                self.thumbnails.insert(panel_id, handle);
+                continue;
+            }
+
+            let thumbnail_id = match register_thumbnail(
+                windows::Win32::Foundation::HWND(handle.dest_hwnd as *mut _),
+                windows::Win32::Foundation::HWND(handle.source_hwnd as *mut _),
+            ) {
+                Ok(thumbnail_id) => thumbnail_id,
+                Err(error) => {
+                    if first_error.is_none() {
+                        first_error = Some(error.to_string());
+                    }
+                    continue;
+                }
+            };
+            handle.thumbnail_id = thumbnail_id;
+            if handle.visible {
+                if let Err(error) = apply_thumbnail_properties(&handle) {
+                    if first_error.is_none() {
+                        first_error = Some(error.to_string());
+                    }
+                }
+            }
+            self.thumbnails.insert(panel_id, handle);
+        }
+
+        if let Some(error) = first_error {
+            Err(error.into())
+        } else {
+            Ok(())
+        }
     }
 
     #[cfg(target_os = "windows")]
@@ -310,6 +399,13 @@ impl SharedThumbnailManager {
             self.lock_manager()?
                 .update_rect(panel_id, x, y, width, height)
         }
+    }
+
+    pub fn sync_stack_order(
+        &self,
+        ordered_panel_ids: Vec<String>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        unsafe { self.lock_manager()?.sync_stack_order(ordered_panel_ids) }
     }
 
     pub fn unregister(&self, panel_id: &str) -> Result<(), Box<dyn std::error::Error>> {

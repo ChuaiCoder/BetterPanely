@@ -37,6 +37,7 @@ class TestWorkbenchRuntimeShape:
         assert "commands::workbench_cmds::wb_capture_focused_window" in lib_rs
         assert "commands::workbench_cmds::wb_capture_window_under_cursor" not in lib_rs
         assert "commands::workbench_cmds::wb_update_thumbnail_rect" in lib_rs
+        assert "commands::workbench_cmds::wb_sync_thumbnail_stack" in lib_rs
         assert "commands::workbench_cmds::wb_open_tool_window" in lib_rs
         assert "commands::settings_cmds::set_settings" in lib_rs
         assert "commands::settings_cmds::open_settings" in lib_rs
@@ -82,6 +83,8 @@ class TestWorkbenchRuntimeShape:
         assert "AddThumbnailResult" in workbench_cmds
         assert "source_width: source_size.width" in workbench_cmds
         assert "source_height: source_size.height" in workbench_cmds
+        assert "wb_sync_thumbnail_stack" in workbench_cmds
+        assert ".sync_stack_order(panel_ids)" in compact_workbench_cmds
         assert "get_webview_window(crate::WORKBENCH_WINDOW_LABEL)" in workbench_cmds
         assert ".register(dest_hwnd,source_hwnd,&panel_id)" in compact_workbench_cmds
         assert "wb_capture_focused_window" in workbench_cmds
@@ -111,6 +114,7 @@ class TestWorkbenchRuntimeShape:
         assert "Thumbnail manager lock is poisoned" in manager_rs
         assert "self.lock_manager()?.register" in compact_manager
         assert "self.lock_manager()?.update_rect" in compact_manager
+        assert "self.lock_manager()?.sync_stack_order" in compact_manager
         assert "self.lock_manager()?.unregister_by_panel_id" in compact_manager
         assert "pub fn next_panel_id(&self) -> Result<String" in manager_rs
         assert "Ok(self.lock_manager()?.next_panel_id())" in manager_rs
@@ -167,6 +171,7 @@ class TestWorkbenchRuntimeShape:
         lib_rs = (repo_root / "src-tauri/src/lib.rs").read_text(encoding="utf-8")
 
         assert "source_hwnd" in manager_rs
+        assert "dest_hwnd" in manager_rs
         assert "IsWindow" in manager_rs
         assert "Thumbnail source window is no longer available" in manager_rs
         assert "SetWinEventHook" in manager_rs
@@ -176,6 +181,14 @@ class TestWorkbenchRuntimeShape:
         assert '"thumb:source-closed"' in manager_rs
         assert "visible: false" in manager_rs
         assert "handle.visible = true;" in manager_rs
+        assert "apply_thumbnail_properties" in manager_rs
+        assert "pub unsafe fn sync_stack_order" in manager_rs
+        assert "HashSet" in manager_rs
+        assert "std::mem::take(&mut self.thumbnails)" in manager_rs
+        assert "next_stack.extend(ordered_handles)" in manager_rs
+        assert "let thumbnail_id = match register_thumbnail" in manager_rs
+        assert "handle.thumbnail_id = thumbnail_id;" in manager_rs
+        assert "apply_thumbnail_properties(&handle)" in manager_rs
         assert "install_source_lifecycle_hook" in lib_rs
         assert "listen<SourceClosedPayload>" in canvas_tsx
         assert 'data-thumbnail-panel-id={props.panel.id}' in thumb_panel
@@ -197,6 +210,12 @@ class TestWorkbenchRuntimeShape:
         assert "getThumbnailPanelSize(thumbnail)" in canvas_tsx
         assert 'Pick<ThumbnailRegistration, "sourceWidth" | "sourceHeight">' in canvas_tsx
         assert "thumbnail.sourceWidth / thumbnail.sourceHeight" in canvas_tsx
+        assert "thumbnailPanelsInStackOrder" in canvas_tsx
+        assert "left.zIndex - right.zIndex" in canvas_tsx
+        assert "syncThumbnailStack(panelIds)" in canvas_tsx
+        assert 'syncThumbnailStackOrder(panels(), "add")' in canvas_tsx
+        assert 'syncThumbnailStackOrder(nextPanels, "top")' in canvas_tsx
+        assert 'syncThumbnailStackOrder(panels(), "restore")' in canvas_tsx
         assert "const rect = getThumbnailRect(panel)" in canvas_tsx
         assert "await syncThumbnailRect(newPanel);" not in canvas_tsx
         assert canvas_tsx.index("setPanels((prev) => [...prev, newPanel])") < canvas_tsx.index(
@@ -655,6 +674,9 @@ class TestWorkbenchRuntimeShape:
         assert "syncThumbnailRect = async (panel: PanelState, context = \"sync\")" in canvas_tsx
         assert "reportThumbnailSyncFailure(context, e)" in sync_rect_block
         assert "throw e" not in sync_rect_block
+        assert "syncThumbnailStack(panelIds)" in canvas_tsx
+        assert "thumbnailPanelsInStackOrder().forEach" in canvas_tsx
+        assert ".sort((left, right) => left.zIndex - right.zIndex)" in canvas_tsx
         assert "void syncThumbnailRect(panel, context)" in canvas_tsx
         assert 'void syncThumbnailRect(movedPanel, "external-drop")' in canvas_tsx
         assert 'void syncThumbnailRect(movedPanel, "drag")' in canvas_tsx
@@ -780,13 +802,16 @@ class TestWorkbenchPersistenceShape:
             "await updateThumbnailRect(restoredPanel.id, rect.x, rect.y, rect.width, rect.height)"
             not in restore_block
         )
-        assert 'window.requestAnimationFrame(() => syncAllThumbnailRects("restore"))' in canvas_tsx
+        assert 'syncAllThumbnailRects("restore");' in canvas_tsx
+        assert 'syncThumbnailStackOrder(panels(), "restore");' in canvas_tsx
         assert "await syncThumbnailRect(restoredPanel)" not in restore_block
         assert "await removePanel(panelId)" in restore_block
         assert "Failed to clean up restored thumbnail" in restore_block
         assert "captureWindowUnderCursor" not in canvas_tsx
         assert 'invoke<WindowInfoRaw | null>("wb_capture_focused_window")' in workbench_api
         assert 'invoke<ThumbnailRegistration>("wb_add_thumbnail"' in workbench_api
+        assert "syncThumbnailStack(panelIds: string[])" in workbench_api
+        assert 'invoke("wb_sync_thumbnail_stack", { panelIds })' in workbench_api
         assert "wb_capture_window_under_cursor" not in workbench_api
         assert "openToolWindow" in canvas_tsx
 

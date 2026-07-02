@@ -11,6 +11,7 @@ import {
   captureFocusedWindow,
   focusSource,
   removePanel,
+  syncThumbnailStack,
   updateThumbnailRect,
   loadLayout,
   saveLayout,
@@ -324,11 +325,21 @@ export function WorkbenchCanvas() {
     }
   };
 
+  const thumbnailPanelsInStackOrder = (items: PanelState[] = panels()) =>
+    [...items]
+      .filter((panel) => panel.type === "thumbnail" && panel.sourceHwnd)
+      .sort((left, right) => left.zIndex - right.zIndex);
+
+  const syncThumbnailStackOrder = (items: PanelState[] = panels(), context = "stack") => {
+    const panelIds = thumbnailPanelsInStackOrder(items).map((panel) => panel.id);
+    if (panelIds.length <= 1) return;
+
+    syncThumbnailStack(panelIds).catch((error) => reportThumbnailSyncFailure(context, error));
+  };
+
   const syncAllThumbnailRects = (context: string) => {
-    panels().forEach((panel) => {
-      if (panel.type === "thumbnail") {
-        void syncThumbnailRect(panel, context);
-      }
+    thumbnailPanelsInStackOrder().forEach((panel) => {
+      void syncThumbnailRect(panel, context);
     });
   };
 
@@ -418,6 +429,7 @@ export function WorkbenchCanvas() {
         removePanelState(panelId);
         return null;
       }
+      syncThumbnailStackOrder(panels(), "add");
       return newPanel;
     } catch (e) {
       if (panelId) {
@@ -483,9 +495,15 @@ export function WorkbenchCanvas() {
   };
 
   const handleTop = (panelId: string) => {
-    setPanels((prev) =>
-      prev.map((p) => (p.id === panelId ? { ...p, zIndex: getNextZIndex() } : p))
-    );
+    let nextPanels: PanelState[] | null = null;
+    setPanels((prev) => {
+      const nextZIndex = prev.reduce((acc, panel) => Math.max(acc, panel.zIndex), 0) + 1;
+      nextPanels = prev.map((p) => (p.id === panelId ? { ...p, zIndex: nextZIndex } : p));
+      return nextPanels;
+    });
+    if (nextPanels) {
+      syncThumbnailStackOrder(nextPanels, "top");
+    }
   };
 
   const handleDragStart = (panelId: string, offsetX: number, offsetY: number) => {
@@ -762,7 +780,10 @@ export function WorkbenchCanvas() {
         const saved = await loadLayout();
         if (saved.length > 0) {
           setPanels(await restoreSavedPanels(saved));
-          window.requestAnimationFrame(() => syncAllThumbnailRects("restore"));
+          window.requestAnimationFrame(() => {
+            syncAllThumbnailRects("restore");
+            syncThumbnailStackOrder(panels(), "restore");
+          });
         }
       } catch (e) {
         console.warn("Failed to load layout:", e);

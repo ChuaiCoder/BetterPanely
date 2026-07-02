@@ -84,6 +84,10 @@ export async function updateThumbnailRect(
   return invoke("wb_update_thumbnail_rect", { panelId, x, y, width, height });
 }
 
+export async function syncThumbnailStack(panelIds: string[]): Promise<void> {
+  return invoke("wb_sync_thumbnail_stack", { panelIds });
+}
+
 /**
  * 移除面板
  * @param panelId 面板 ID

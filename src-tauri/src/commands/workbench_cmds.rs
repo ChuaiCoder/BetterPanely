@@ -224,6 +224,16 @@ pub fn wb_update_thumbnail_rect(
 }
 
 #[tauri::command]
+pub fn wb_sync_thumbnail_stack(
+    panel_ids: Vec<String>,
+    thumbnail_manager: State<'_, SharedThumbnailManager>,
+) -> Result<(), String> {
+    thumbnail_manager
+        .sync_stack_order(panel_ids)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn wb_remove_panel(
     panel_id: String,
     thumbnail_manager: State<'_, SharedThumbnailManager>,
