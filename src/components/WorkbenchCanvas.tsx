@@ -16,9 +16,15 @@ import {
   saveLayout,
   openToolWindow,
 } from "../lib/workbench-api";
+import type { ThumbnailRegistration } from "../lib/workbench-api";
 import type { PanelState, SnapGuide, WindowInfo } from "../lib/types";
 
 const PANEL_HEADER_HEIGHT = 32;
+const DEFAULT_THUMBNAIL_CONTENT_WIDTH = 240;
+const DEFAULT_THUMBNAIL_CONTENT_HEIGHT = 150;
+const MIN_THUMBNAIL_CONTENT_WIDTH = 160;
+const MAX_THUMBNAIL_CONTENT_WIDTH = 360;
+const MAX_THUMBNAIL_CONTENT_HEIGHT = 420;
 const NOTICE_TIMEOUT_MS = 5000;
 const THUMBNAIL_HEALTH_INTERVAL_MS = 30000;
 const THUMBNAIL_SYNC_NOTICE_COOLDOWN_MS = 10000;
@@ -66,6 +72,18 @@ interface PanelInitialPosition {
 interface CanvasSize {
   width: number;
   height: number;
+}
+
+interface ThumbnailPanelSize {
+  width: number;
+  height: number;
+}
+
+interface CssRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
 }
 
 /**
@@ -164,6 +182,11 @@ export function WorkbenchCanvas() {
     return panel.title === title ? panel : { ...panel, title };
   };
 
+  const waitForNextFrame = () =>
+    new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => resolve());
+    });
+
   const syncToolPanelTitles = () => {
     setPanels((prev) => {
       let changed = false;
@@ -176,14 +199,87 @@ export function WorkbenchCanvas() {
     });
   };
 
-  const getThumbnailRect = (panel: PanelState) => {
-    const canvasRect = canvasRef?.getBoundingClientRect();
+  const getThumbnailContentElement = (panelId: string) =>
+    Array.from(canvasRef?.querySelectorAll<HTMLElement>("[data-thumbnail-panel-id]") ?? [])
+      .find((element) => element.dataset.thumbnailPanelId === panelId) ?? null;
+
+  const nativeScale = () => window.devicePixelRatio || 1;
+
+  const cssRectToNative = (rect: CssRect) => {
+    const scale = nativeScale();
+    const left = Math.round(rect.left * scale);
+    const top = Math.round(rect.top * scale);
+    const right = Math.round(rect.right * scale);
+    const bottom = Math.round(rect.bottom * scale);
+
     return {
-      x: panel.x + (canvasRect?.left ?? 0),
-      y: panel.y + (canvasRect?.top ?? 0) + PANEL_HEADER_HEIGHT,
-      width: panel.width,
-      height: Math.max(1, panel.height - PANEL_HEADER_HEIGHT),
+      x: left,
+      y: top,
+      width: Math.max(1, right - left),
+      height: Math.max(1, bottom - top),
     };
+  };
+
+  const getThumbnailPanelSize = (
+    thumbnail: Pick<ThumbnailRegistration, "sourceWidth" | "sourceHeight">,
+    preferredContentWidth = DEFAULT_THUMBNAIL_CONTENT_WIDTH
+  ): ThumbnailPanelSize => {
+    if (
+      !Number.isFinite(thumbnail.sourceWidth) ||
+      !Number.isFinite(thumbnail.sourceHeight) ||
+      thumbnail.sourceWidth <= 0 ||
+      thumbnail.sourceHeight <= 0
+    ) {
+      return {
+        width: DEFAULT_THUMBNAIL_CONTENT_WIDTH,
+        height: DEFAULT_THUMBNAIL_CONTENT_HEIGHT + PANEL_HEADER_HEIGHT,
+      };
+    }
+
+    const aspectRatio = thumbnail.sourceWidth / thumbnail.sourceHeight;
+    let contentWidth = clamp(
+      preferredContentWidth,
+      MIN_THUMBNAIL_CONTENT_WIDTH,
+      MAX_THUMBNAIL_CONTENT_WIDTH
+    );
+    let contentHeight = contentWidth / aspectRatio;
+
+    if (contentHeight > MAX_THUMBNAIL_CONTENT_HEIGHT) {
+      contentHeight = MAX_THUMBNAIL_CONTENT_HEIGHT;
+      contentWidth = contentHeight * aspectRatio;
+    }
+
+    if (contentWidth > MAX_THUMBNAIL_CONTENT_WIDTH) {
+      contentWidth = MAX_THUMBNAIL_CONTENT_WIDTH;
+      contentHeight = contentWidth / aspectRatio;
+    }
+
+    if (contentWidth < MIN_THUMBNAIL_CONTENT_WIDTH && contentHeight < MAX_THUMBNAIL_CONTENT_HEIGHT) {
+      contentWidth = Math.min(MIN_THUMBNAIL_CONTENT_WIDTH, MAX_THUMBNAIL_CONTENT_WIDTH);
+      contentHeight = contentWidth / aspectRatio;
+    }
+
+    return {
+      width: Math.max(1, Math.round(contentWidth)),
+      height: Math.max(1, Math.round(contentHeight + PANEL_HEADER_HEIGHT)),
+    };
+  };
+
+  const getThumbnailRect = (panel: PanelState) => {
+    const content = getThumbnailContentElement(panel.id);
+    if (content) {
+      return cssRectToNative(content.getBoundingClientRect());
+    }
+
+    const canvasRect = canvasRef?.getBoundingClientRect();
+    const left = panel.x + (canvasRect?.left ?? 0);
+    const top = panel.y + (canvasRect?.top ?? 0) + PANEL_HEADER_HEIGHT;
+    return cssRectToNative({
+      left,
+      top,
+      right: left + panel.width,
+      bottom: top + Math.max(1, panel.height - PANEL_HEADER_HEIGHT),
+    });
   };
 
   const constrainPanelPosition = (panel: PanelState, size: CanvasSize = canvasSize()) => {
@@ -294,9 +390,9 @@ export function WorkbenchCanvas() {
   ): Promise<PanelState | null> => {
     let panelId: string | null = null;
     try {
-      panelId = await addThumbnail(hwnd);
-      const width = 200;
-      const height = 150;
+      const thumbnail = await addThumbnail(hwnd);
+      panelId = thumbnail.panelId;
+      const { width, height } = getThumbnailPanelSize(thumbnail);
       const position = getPanelInitialPosition(width, height, initialPosition);
       const newPanel: PanelState = {
         id: panelId,
@@ -310,9 +406,18 @@ export function WorkbenchCanvas() {
         zIndex: getNextZIndex(),
         visible: true,
       };
-      const rect = getThumbnailRect(newPanel);
-      await updateThumbnailRect(newPanel.id, rect.x, rect.y, rect.width, rect.height);
       setPanels((prev) => [...prev, newPanel]);
+      await waitForNextFrame();
+      const synced = await syncThumbnailRect(newPanel, "add");
+      if (!synced) {
+        try {
+          await removePanel(panelId);
+        } catch (cleanupError) {
+          console.error("Failed to clean up thumbnail after sync failure:", cleanupError);
+        }
+        removePanelState(panelId);
+        return null;
+      }
       return newPanel;
     } catch (e) {
       if (panelId) {
@@ -612,10 +717,14 @@ export function WorkbenchCanvas() {
 
       let panelId: string | null = null;
       try {
-        panelId = await addThumbnail(panel.sourceHwnd);
-        const restoredPanel = constrainPanelPosition({ ...panel, id: panelId, visible: true });
-        const rect = getThumbnailRect(restoredPanel);
-        await updateThumbnailRect(restoredPanel.id, rect.x, rect.y, rect.width, rect.height);
+        const thumbnail = await addThumbnail(panel.sourceHwnd);
+        panelId = thumbnail.panelId;
+        const restoredPanel = constrainPanelPosition({
+          ...panel,
+          ...getThumbnailPanelSize(thumbnail, panel.width),
+          id: panelId,
+          visible: true,
+        });
         restored.push(restoredPanel);
       } catch (e) {
         if (panelId) {
@@ -653,6 +762,7 @@ export function WorkbenchCanvas() {
         const saved = await loadLayout();
         if (saved.length > 0) {
           setPanels(await restoreSavedPanels(saved));
+          window.requestAnimationFrame(() => syncAllThumbnailRects("restore"));
         }
       } catch (e) {
         console.warn("Failed to load layout:", e);

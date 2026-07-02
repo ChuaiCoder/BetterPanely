@@ -72,9 +72,16 @@ class TestWorkbenchRuntimeShape:
         compact_workbench_cmds = "".join(workbench_cmds.split())
 
         assert "DwmRegisterThumbnail" in dwm_rs
+        assert "DwmQueryThumbnailSourceSize" in dwm_rs
         assert "DwmUpdateThumbnailProperties" in dwm_rs
         assert "DwmUnregisterThumbnail" in dwm_rs
         assert "DWM_TNP_RECTDESTINATION" in manager_rs
+        assert "GetClientRect" in manager_rs
+        assert "source_client_size(source_hwnd)" in manager_rs
+        assert "query_thumbnail_source_size(thumbnail_id)" in manager_rs
+        assert "AddThumbnailResult" in workbench_cmds
+        assert "source_width: source_size.width" in workbench_cmds
+        assert "source_height: source_size.height" in workbench_cmds
         assert "get_webview_window(crate::WORKBENCH_WINDOW_LABEL)" in workbench_cmds
         assert ".register(dest_hwnd,source_hwnd,&panel_id)" in compact_workbench_cmds
         assert "wb_capture_focused_window" in workbench_cmds
@@ -151,6 +158,9 @@ class TestWorkbenchRuntimeShape:
         canvas_tsx = (repo_root / "src/components/WorkbenchCanvas.tsx").read_text(
             encoding="utf-8"
         )
+        thumb_panel = (repo_root / "src/components/ThumbPanel.tsx").read_text(
+            encoding="utf-8"
+        )
         workbench_api = (repo_root / "src/lib/workbench-api.ts").read_text(
             encoding="utf-8"
         )
@@ -164,26 +174,38 @@ class TestWorkbenchRuntimeShape:
         assert "WINEVENT_SKIPOWNPROCESS" in manager_rs
         assert "SourceClosedPayload" in manager_rs
         assert '"thumb:source-closed"' in manager_rs
+        assert "visible: false" in manager_rs
+        assert "handle.visible = true;" in manager_rs
         assert "install_source_lifecycle_hook" in lib_rs
         assert "listen<SourceClosedPayload>" in canvas_tsx
+        assert 'data-thumbnail-panel-id={props.panel.id}' in thumb_panel
+        assert "getThumbnailContentElement" in canvas_tsx
+        assert "element.dataset.thumbnailPanelId === panelId" in canvas_tsx
+        assert "window.devicePixelRatio || 1" in canvas_tsx
+        assert "cssRectToNative(content.getBoundingClientRect())" in canvas_tsx
+        assert "waitForNextFrame" in canvas_tsx
+        assert "await waitForNextFrame()" in canvas_tsx
+        assert 'syncThumbnailRect(newPanel, "add")' in canvas_tsx
+        assert 'syncAllThumbnailRects("restore")' in canvas_tsx
         assert "removeClosedSourcePanel" in canvas_tsx
         assert "THUMBNAIL_HEALTH_INTERVAL_MS = 30000" in canvas_tsx
         assert "source window is no longer available" in canvas_tsx
         assert "thumb:source-closed" not in workbench_api
         assert "let panelId: string | null = null;" in canvas_tsx
-        assert "panelId = await addThumbnail(hwnd)" in canvas_tsx
-        assert "const rect = getThumbnailRect(newPanel)" in canvas_tsx
-        assert (
-            "await updateThumbnailRect(newPanel.id, rect.x, rect.y, rect.width, rect.height)"
-            in canvas_tsx
-        )
+        assert "const thumbnail = await addThumbnail(hwnd)" in canvas_tsx
+        assert "panelId = thumbnail.panelId" in canvas_tsx
+        assert "getThumbnailPanelSize(thumbnail)" in canvas_tsx
+        assert 'Pick<ThumbnailRegistration, "sourceWidth" | "sourceHeight">' in canvas_tsx
+        assert "thumbnail.sourceWidth / thumbnail.sourceHeight" in canvas_tsx
+        assert "const rect = getThumbnailRect(panel)" in canvas_tsx
         assert "await syncThumbnailRect(newPanel);" not in canvas_tsx
-        assert canvas_tsx.index("await updateThumbnailRect(newPanel.id") < canvas_tsx.index(
-            "setPanels((prev) => [...prev, newPanel])"
+        assert canvas_tsx.index("setPanels((prev) => [...prev, newPanel])") < canvas_tsx.index(
+            "const synced = await syncThumbnailRect(newPanel"
         )
         assert "if (panelId)" in canvas_tsx
         assert "await removePanel(panelId)" in canvas_tsx
         assert "Failed to clean up thumbnail after add failure" in canvas_tsx
+        assert "Failed to clean up thumbnail after sync failure" in canvas_tsx
 
     def test_add_panel_dialog_blocks_incompatible_windows(self, repo_root):
         dialog_tsx = (repo_root / "src/components/AddPanelDialog.tsx").read_text(
@@ -742,25 +764,29 @@ class TestWorkbenchPersistenceShape:
         restore_block = canvas_tsx.split(
             "const restoreSavedPanels = async", 1
         )[1].split("onMount", 1)[0]
+        compact_restore_block = "".join(restore_block.split())
 
         assert "./lib/settings-api" in main_tsx
         assert "./settings-api" in i18n_tsx
         assert "../lib/workbench-api" in canvas_tsx
         assert "saveLayout" in canvas_tsx
         assert "captureFocusedWindow" in canvas_tsx
-        assert "const restoredPanel = constrainPanelPosition({ ...panel, id: panelId, visible: true })" in restore_block
+        assert "constthumbnail=awaitaddThumbnail(panel.sourceHwnd)" in compact_restore_block
+        assert "panelId=thumbnail.panelId" in compact_restore_block
+        assert "...getThumbnailPanelSize(thumbnail,panel.width)" in compact_restore_block
+        assert "id:panelId" in compact_restore_block
+        assert "visible:true" in compact_restore_block
         assert (
             "await updateThumbnailRect(restoredPanel.id, rect.x, rect.y, rect.width, rect.height)"
-            in restore_block
+            not in restore_block
         )
-        assert restore_block.index("await updateThumbnailRect(restoredPanel.id") < restore_block.index(
-            "restored.push(restoredPanel)"
-        )
+        assert 'window.requestAnimationFrame(() => syncAllThumbnailRects("restore"))' in canvas_tsx
         assert "await syncThumbnailRect(restoredPanel)" not in restore_block
         assert "await removePanel(panelId)" in restore_block
         assert "Failed to clean up restored thumbnail" in restore_block
         assert "captureWindowUnderCursor" not in canvas_tsx
         assert 'invoke<WindowInfoRaw | null>("wb_capture_focused_window")' in workbench_api
+        assert 'invoke<ThumbnailRegistration>("wb_add_thumbnail"' in workbench_api
         assert "wb_capture_window_under_cursor" not in workbench_api
         assert "openToolWindow" in canvas_tsx
 

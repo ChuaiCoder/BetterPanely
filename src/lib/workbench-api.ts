@@ -21,6 +21,12 @@ type WindowInfoRaw = {
   rect: { left: number; top: number; right: number; bottom: number };
 };
 
+export interface ThumbnailRegistration {
+  panelId: string;
+  sourceWidth: number;
+  sourceHeight: number;
+}
+
 function mapWindowInfo(raw: WindowInfoRaw): WindowInfo {
   return {
     hwnd: raw.hwnd,
@@ -56,8 +62,8 @@ export async function captureFocusedWindow(): Promise<WindowInfo | null> {
  * @param sourceHwnd 源窗口的 HWND
  * @returns 面板 ID
  */
-export async function addThumbnail(sourceHwnd: number): Promise<string> {
-  return invoke("wb_add_thumbnail", { sourceHwnd });
+export async function addThumbnail(sourceHwnd: number): Promise<ThumbnailRegistration> {
+  return invoke<ThumbnailRegistration>("wb_add_thumbnail", { sourceHwnd });
 }
 
 /**

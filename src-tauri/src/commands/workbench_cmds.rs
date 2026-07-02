@@ -25,6 +25,14 @@ pub struct RectInfo {
     pub bottom: i32,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddThumbnailResult {
+    pub panel_id: String,
+    pub source_width: i32,
+    pub source_height: i32,
+}
+
 fn to_window_info(w: enumerator::WindowInfo) -> WindowInfo {
     WindowInfo {
         hwnd: w.hwnd as isize,
@@ -170,7 +178,7 @@ pub fn wb_add_thumbnail(
     source_hwnd: isize,
     app: AppHandle,
     thumbnail_manager: State<'_, SharedThumbnailManager>,
-) -> Result<String, String> {
+) -> Result<AddThumbnailResult, String> {
     #[cfg(target_os = "windows")]
     let dest_hwnd = get_workbench_hwnd(&app)?;
     #[cfg(not(target_os = "windows"))]
@@ -186,10 +194,14 @@ pub fn wb_add_thumbnail(
     let panel_id = thumbnail_manager
         .next_panel_id()
         .map_err(|e| e.to_string())?;
-    thumbnail_manager
+    let source_size = thumbnail_manager
         .register(dest_hwnd, source_hwnd, &panel_id)
         .map_err(|e| e.to_string())?;
-    Ok(panel_id)
+    Ok(AddThumbnailResult {
+        panel_id,
+        source_width: source_size.width,
+        source_height: source_size.height,
+    })
 }
 
 #[tauri::command]

@@ -90,6 +90,7 @@ export function ThumbPanel(props: ThumbPanelProps) {
       </div>
       <div
         class="panel-content panel-content-transparent panel-content-focusable"
+        data-thumbnail-panel-id={props.panel.id}
         onClick={handleFocus}
       >
         <Show when={!props.panel.sourceHwnd}>

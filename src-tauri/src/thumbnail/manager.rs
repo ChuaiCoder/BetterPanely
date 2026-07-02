@@ -6,7 +6,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use windows::Win32::Foundation::RECT;
 use windows::Win32::Graphics::Dwm::DWM_THUMBNAIL_PROPERTIES;
 use windows::Win32::UI::Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK};
-use windows::Win32::UI::WindowsAndMessaging::IsWindow;
+use windows::Win32::UI::WindowsAndMessaging::{GetClientRect, IsWindow};
 
 const EVENT_OBJECT_DESTROY_ID: u32 = 0x8001;
 const OBJID_WINDOW_ID: i32 = 0;
@@ -38,6 +38,26 @@ pub struct ThumbnailHandle {
     opacity: f32,
 }
 
+#[cfg(target_os = "windows")]
+unsafe fn source_client_size(
+    source_hwnd: isize,
+) -> Result<ThumbnailSourceSize, Box<dyn std::error::Error>> {
+    let mut rect = RECT::default();
+    GetClientRect(
+        windows::Win32::Foundation::HWND(source_hwnd as *mut _),
+        &mut rect,
+    )
+    .map_err(|e| format!("GetClientRect failed: {:?}", e))?;
+
+    let width = rect.right - rect.left;
+    let height = rect.bottom - rect.top;
+    if width <= 0 || height <= 0 {
+        return Err("Thumbnail source client size is invalid".into());
+    }
+
+    Ok(ThumbnailSourceSize { width, height })
+}
+
 impl ThumbnailManager {
     pub fn new() -> Self {
         Self {
@@ -58,7 +78,7 @@ impl ThumbnailManager {
         dest_hwnd: isize,
         source_hwnd: isize,
         panel_id: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<ThumbnailSourceSize, Box<dyn std::error::Error>> {
         if !IsWindow(windows::Win32::Foundation::HWND(dest_hwnd as *mut _)).as_bool() {
             return Err("Workbench window is no longer available".into());
         }
@@ -74,6 +94,8 @@ impl ThumbnailManager {
             windows::Win32::Foundation::HWND(dest_hwnd as *mut _),
             windows::Win32::Foundation::HWND(source_hwnd as *mut _),
         )?;
+        let source_size = source_client_size(source_hwnd)
+            .or_else(|_| query_thumbnail_source_size(thumbnail_id))?;
 
         let handle = ThumbnailHandle {
             source_hwnd,
@@ -84,13 +106,13 @@ impl ThumbnailManager {
                 right: 100,
                 bottom: 100,
             },
-            visible: true,
+            visible: false,
             opacity: 1.0,
         };
 
         self.thumbnails.insert(panel_id.to_string(), handle);
 
-        Ok(())
+        Ok(source_size)
     }
 
     #[cfg(target_os = "windows")]
@@ -161,6 +183,7 @@ impl ThumbnailManager {
             right,
             bottom,
         };
+        handle.visible = true;
 
         const DWM_TNP_RECTDESTINATION: u32 = 0x00000001;
         const DWM_TNP_OPACITY: u32 = 0x00000004;
@@ -268,7 +291,7 @@ impl SharedThumbnailManager {
         dest_hwnd: isize,
         source_hwnd: isize,
         panel_id: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<ThumbnailSourceSize, Box<dyn std::error::Error>> {
         unsafe {
             self.lock_manager()?
                 .register(dest_hwnd, source_hwnd, panel_id)
