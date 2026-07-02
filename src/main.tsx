@@ -6,19 +6,60 @@ import { getSettings, onSettingsChanged } from "./lib/settings-api";
 import { applyAppTheme, watchSystemTheme } from "./lib/theme";
 import type { Lang } from "./lib/i18n.tsx";
 
-async function bootstrap() {
-  let initialLang: Lang = "en";
+const SETTINGS_LISTENER_RETRY_MS = 1000;
+const SETTINGS_LISTENER_MAX_ATTEMPTS = 3;
 
+let settingsThemeFallbackInstalled = false;
+
+async function loadSettingsForBootstrap(): Promise<Lang> {
   try {
     const saved = await getSettings();
-    if (saved.language === "zh") initialLang = "zh";
     applyAppTheme(saved.theme);
-  } catch {
+    return saved.language === "zh" ? "zh" : "en";
+  } catch (error) {
+    console.error("Failed to load settings during bootstrap:", error);
     applyAppTheme("dark");
+    return "en";
   }
+}
+
+async function refreshThemeFromSettings(context: string) {
+  try {
+    const saved = await getSettings();
+    applyAppTheme(saved.theme);
+  } catch (error) {
+    console.error(`Failed to refresh theme from settings (${context}):`, error);
+  }
+}
+
+function installSettingsThemeFallback() {
+  if (settingsThemeFallbackInstalled) return;
+  settingsThemeFallbackInstalled = true;
+
+  window.addEventListener("focus", () => {
+    void refreshThemeFromSettings("focus-fallback");
+  });
+}
+
+function registerSettingsThemeListener(attempt = 1) {
+  onSettingsChanged((settings) => applyAppTheme(settings.theme)).catch((error) => {
+    console.error(`Failed to listen for settings changes (attempt ${attempt}):`, error);
+    if (attempt < SETTINGS_LISTENER_MAX_ATTEMPTS) {
+      window.setTimeout(
+        () => registerSettingsThemeListener(attempt + 1),
+        SETTINGS_LISTENER_RETRY_MS
+      );
+      return;
+    }
+    installSettingsThemeFallback();
+  });
+}
+
+async function bootstrap() {
+  const initialLang = await loadSettingsForBootstrap();
 
   watchSystemTheme();
-  onSettingsChanged((settings) => applyAppTheme(settings.theme)).catch(console.error);
+  registerSettingsThemeListener();
 
   const { I18nProvider } = createI18n(initialLang);
 

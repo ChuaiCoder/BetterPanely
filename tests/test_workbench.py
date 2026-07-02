@@ -755,6 +755,31 @@ class TestWorkbenchPersistenceShape:
         assert "wb_capture_window_under_cursor" not in workbench_api
         assert "openToolWindow" in canvas_tsx
 
+    def test_main_settings_theme_listener_retries_and_falls_back(self, repo_root):
+        main_tsx = (repo_root / "src/main.tsx").read_text(encoding="utf-8")
+
+        assert "SETTINGS_LISTENER_RETRY_MS = 1000" in main_tsx
+        assert "SETTINGS_LISTENER_MAX_ATTEMPTS = 3" in main_tsx
+        assert "let settingsThemeFallbackInstalled = false" in main_tsx
+        assert "async function loadSettingsForBootstrap(): Promise<Lang>" in main_tsx
+        assert 'console.error("Failed to load settings during bootstrap:", error)' in main_tsx
+        assert "async function refreshThemeFromSettings(context: string)" in main_tsx
+        assert "Failed to refresh theme from settings (${context}):" in main_tsx
+        assert "function installSettingsThemeFallback()" in main_tsx
+        assert "if (settingsThemeFallbackInstalled) return" in main_tsx
+        assert 'window.addEventListener("focus", () =>' in main_tsx
+        assert 'void refreshThemeFromSettings("focus-fallback")' in main_tsx
+        assert "function registerSettingsThemeListener(attempt = 1)" in main_tsx
+        assert "onSettingsChanged((settings) => applyAppTheme(settings.theme)).catch((error) =>" in main_tsx
+        assert "Failed to listen for settings changes (attempt ${attempt}):" in main_tsx
+        assert "attempt < SETTINGS_LISTENER_MAX_ATTEMPTS" in main_tsx
+        assert "window.setTimeout(" in main_tsx
+        assert "() => registerSettingsThemeListener(attempt + 1)" in main_tsx
+        assert "installSettingsThemeFallback()" in main_tsx
+        assert "const initialLang = await loadSettingsForBootstrap()" in main_tsx
+        assert "registerSettingsThemeListener()" in main_tsx
+        assert ".catch(console.error)" not in main_tsx
+
     def test_saved_layout_deserialization_rejects_invalid_panel_data(self, repo_root):
         state_rs = (repo_root / "src-tauri/src/state.rs").read_text(encoding="utf-8")
         workbench_api = (repo_root / "src/lib/workbench-api.ts").read_text(
