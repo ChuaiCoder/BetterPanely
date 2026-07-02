@@ -903,6 +903,9 @@ class TestWorkbenchPersistenceShape:
         assert "get_webview_window(crate::WORKBENCH_WINDOW_LABEL)" in hotkeys_rs
         assert 'TRAY_ID: &str = "betterpanely-tray"' in tray_rs
         assert "TrayIconBuilder::with_id(TRAY_ID)" in tray_rs
+        assert "app.default_window_icon().cloned()" in tray_rs
+        assert ".icon(icon)" in tray_rs
+        assert ".show_menu_on_left_click(false)" in tray_rs
         assert "build_tray_menu" in tray_rs
         assert "refresh_tray_language" in tray_rs
         assert "app.tray_by_id(TRAY_ID)" in tray_rs

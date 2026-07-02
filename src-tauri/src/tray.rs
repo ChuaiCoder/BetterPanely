@@ -12,9 +12,14 @@ pub fn create_tray<R: Runtime>(
     lang: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let menu = build_tray_menu(app, lang)?;
+    let icon = app.default_window_icon().cloned().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, "Default app icon is not available")
+    })?;
 
     let _tray = TrayIconBuilder::with_id(TRAY_ID)
+        .icon(icon)
         .menu(&menu)
+        .show_menu_on_left_click(false)
         .tooltip(crate::locales::t("tray.tooltip", lang))
         .on_menu_event(move |app_handle, event| {
             handle_tray_menu(app_handle, event.id().as_ref());
